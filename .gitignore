@@ -1,40 +1,25 @@
-venv/
-env/
-ENV/
-
 # Python cache
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
+
+# Virtual environment
+venv/
+env/
 
 # IDE settings
 .idea/
 .vscode/
-*.swp
-*.swo
 
 # Environment variables
 .env
-.env.local
-.env.*.local
 
 # Log files
 *.log
-logs/
-log/
 
 # System files
 .DS_Store
 Thumbs.db
-
-# Database
-*.db
-*.sqlite3
-
-# Temporary files
-tmp/
-temp/
 
 # Distribution / packaging
 dist/
@@ -43,11 +28,8 @@ build/
 
 # Testing
 .coverage
-htmlcov/
 .pytest_cache/
 
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# Local development settings
-instance/
+# Data files
+*.csv
+*.xlsx

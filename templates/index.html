@@ -132,7 +132,6 @@
             border-color: #007bff;
         }
 
-        /* Responsive adjustments */
         @media (max-width: 768px) {
             .container {
                 padding: 1rem;
@@ -156,7 +155,6 @@
             }
         }
 
-        /* Custom styles for prediction form */
         #predictionInputs .mb-3 {
             background: #f8f9fa;
             padding: 1rem;
@@ -175,7 +173,6 @@
             text-align: center;
         }
 
-        /* Button group styling */
         .button-group {
             display: flex;
             gap: 1rem;
@@ -228,7 +225,6 @@
             height: 3rem;
         }
 
-        /* Optional: Animasi fade untuk loading */
         @keyframes fadeIn {
             from { opacity: 0; }
             to { opacity: 1; }
@@ -249,7 +245,20 @@
                 <h4><span class="step-number">1</span>Upload Dataset</h4>
             </div>
             <div class="card-body">
-                <input type="file" id="fileInput" accept=".csv,.xlsx" class="form-control">
+                <div class="mb-3">
+                    <input type="file" id="fileInput" accept=".csv,.xlsx" class="form-control">
+                    <div class="form-text text-muted mt-2">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Format file yang didukung:
+                        <ul class="mt-1 mb-0">
+                            <li>Excel (.xlsx)</li>
+                            <li>CSV (.csv)</li>
+                        </ul>
+                        <small class="d-block mt-1">
+                            <strong>Catatan:</strong> Pastikan file dataset Anda dalam format Excel (.xlsx) atau CSV (.csv) dan berisi data yang valid.
+                        </small>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -273,6 +282,15 @@
                     <div class="col-md-6">
                         <h5 class="mb-3">Kolom Target (Y)</h5>
                         <select class="form-select" id="yColumn"></select>
+                        <div class="form-text text-muted mt-2">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Catatan:
+                            <ul class="mt-1 mb-0">
+                                <li>Hanya menampilkan kolom yang memiliki minimal 3 nilai unik</li>
+                                <li>Kolom yang tidak memenuhi syarat akan otomatis disembunyikan</li>
+                                <li>Nilai unik diperlukan untuk klasifikasi: Sehat, Berisiko Rendah, dan Berisiko Tinggi</li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
                 <div class="d-flex justify-content-end mt-3">
@@ -377,7 +395,6 @@
         let manual_encodings = {};
         let column_types = {};
 
-        // Handle file upload
         $('#fileInput').change(function() {
             const file = this.files[0];
             const formData = new FormData();
@@ -398,7 +415,6 @@
         function displayColumnSelection(columns) {
             $('#columnSelection').show();
             
-            // X columns (multiple selection)
             const xColumnsHtml = columns.map(column => 
                 `<div class="form-check">
                     <input class="form-check-input x-column-checkbox" type="checkbox" value="${column}" id="x_${column}">
@@ -407,19 +423,45 @@
             ).join('');
             $('#xColumns').html(xColumnsHtml);
 
-            // Y column (single selection)
-            const yColumnsHtml = columns.map(column => 
-                `<option value="${column}">${column}</option>`
-            ).join('');
-            $('#yColumn').html(yColumnsHtml);
+            $.ajax({
+                url: '/check_valid_y_columns',
+                type: 'POST',
+                contentType: 'application/json',
+                success: function(response) {
+                    const validYColumns = response.valid_columns;
+                    
+                    const yColumnsHtml = columns
+                        .filter(column => validYColumns.includes(column))
+                        .map(column => `<option value="${column}">${column}</option>`)
+                        .join('');
+                    
+                    if (yColumnsHtml) {
+                        $('#yColumn').html(yColumnsHtml);
+                    } else {
+                        $('#yColumn').html(`
+                            <option value="">Tidak ada kolom yang memenuhi syarat (min. 3 nilai unik)</option>
+                        `);
+                        const alertHtml = `
+                            <div class="alert alert-warning alert-dismissible fade show mt-2" role="alert">
+                                <strong>Perhatian!</strong> Tidak ada kolom yang memenuhi syarat sebagai target (Y).
+                                Kolom target harus memiliki minimal 3 nilai unik.
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        `;
+                        $('#yColumn').after(alertHtml);
+                    }
+                },
+                error: function(error) {
+                    console.error("Error checking valid Y columns:", error);
+                    $('#yColumn').html('<option value="">Error loading columns</option>');
+                }
+            });
 
-            // Event listener untuk select all
             $('#selectAllX').change(function() {
                 const isChecked = $(this).prop('checked');
                 $('.x-column-checkbox').prop('checked', isChecked);
             });
 
-            // Event listener untuk update select all status
             $('.x-column-checkbox').change(function() {
                 const totalCheckboxes = $('.x-column-checkbox').length;
                 const checkedCheckboxes = $('.x-column-checkbox:checked').length;
@@ -513,7 +555,6 @@
                 </div>
             `;
 
-            // Tambahkan fungsi untuk mendapatkan warna header yang berbeda
             function getHeaderColor(index) {
                 const colors = [
                     'linear-gradient(45deg, #007bff, #00d2ff)',
@@ -529,7 +570,6 @@
                 $('body').append(modalHtml);
             }
 
-            // Tambahkan CSS untuk animasi hover
             const style = `
                 <style>
                     .category-section {
@@ -586,7 +626,6 @@
             });
 
             manual_encodings = encodingData;
-            console.log("Saved encodings:", manual_encodings); // Debug
 
             $.ajax({
                 url: '/save_encoding',
@@ -601,24 +640,6 @@
         }
 
         function processData() {
-            // Tambahkan loading indicator
-            const loadingHtml = `
-                <div class="text-center my-4" id="loadingIndicator">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <p class="mt-2">Sedang memproses data...</p>
-                    <small class="text-muted">Ini mungkin memakan waktu beberapa saat karena sedang melakukan optimasi model</small>
-                </div>
-            `;
-
-            // Tampilkan loading dan sembunyikan tombol
-            $('.modal-footer button').prop('disabled', true);
-            $('#results').hide();
-            $('#newPrediction').hide();
-            $('#columnSelection .btn').prop('disabled', true);
-            $('#columnSelection').append(loadingHtml);
-
             selectedXColumns = [];
             $('.x-column-checkbox:checked').each(function() {
                 selectedXColumns.push($(this).val());
@@ -635,8 +656,9 @@
                 return;
             }
 
-            // Cek apakah ada kolom kategorikal yang belum diset
             let hasUnsetCategorical = false;
+            let hasIncompleteEncoding = false;
+
             $.ajax({
                 url: '/check_categorical',
                 type: 'POST',
@@ -644,14 +666,25 @@
                     'columns': [...selectedXColumns, selectedYColumn]
                 }),
                 contentType: 'application/json',
-                async: false, // Tunggu sampai selesai
+                async: false,
                 success: function(response) {
                     if (response.categorical_columns.length > 0) {
-                        // Cek apakah semua kolom kategorikal sudah diset
                         const unsetColumns = response.categorical_columns.filter(column => 
                             !(column in manual_encodings) || 
                             Object.keys(manual_encodings[column]).length === 0
                         );
+                        
+                        response.categorical_columns.forEach(column => {
+                            if (column in manual_encodings) {
+                                const uniqueValues = response.unique_values[column] || [];
+                                const encodedValues = Object.keys(manual_encodings[column]);
+                                
+                                if (uniqueValues.length !== encodedValues.length) {
+                                    hasIncompleteEncoding = true;
+                                    alert(`Beberapa nilai kategori pada kolom "${column}" belum diset!`);
+                                }
+                            }
+                        });
                         
                         if (unsetColumns.length > 0) {
                             hasUnsetCategorical = true;
@@ -663,11 +696,26 @@
                 }
             });
 
-            if (hasUnsetCategorical) {
+            if (hasUnsetCategorical || hasIncompleteEncoding) {
                 return;
             }
 
-            // Lanjutkan dengan proses jika semua validasi berhasil
+            const loadingHtml = `
+                <div class="text-center my-4" id="loadingIndicator">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Sedang memproses data...</p>
+                    <small class="text-muted">Ini mungkin memakan waktu beberapa saat karena sedang melakukan optimasi model</small>
+                </div>
+            `;
+
+            $('.modal-footer button').prop('disabled', true);
+            $('#results').hide();
+            $('#newPrediction').hide();
+            $('#columnSelection .btn').prop('disabled', true);
+            $('#columnSelection').append(loadingHtml);
+
             $.ajax({
                 url: '/process',
                 type: 'POST',
@@ -677,7 +725,6 @@
                 }),
                 contentType: 'application/json',
                 success: function(response) {
-                    // Sembunyikan loading dan aktifkan kembali tombol
                     $('#loadingIndicator').remove();
                     $('.modal-footer button').prop('disabled', false);
                     $('#columnSelection .btn').prop('disabled', false);
@@ -686,12 +733,22 @@
                     setupPredictionForm();
                 },
                 error: function(xhr, status, error) {
-                    // Sembunyikan loading dan aktifkan kembali tombol
                     $('#loadingIndicator').remove();
                     $('.modal-footer button').prop('disabled', false);
                     $('#columnSelection .btn').prop('disabled', false);
                     
-                    alert('Error processing data: ' + error);
+                    if (xhr.status === 400) {
+                        const errorResponse = JSON.parse(xhr.responseText);
+                        const errorAlert = `
+                            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                                <strong>Error!</strong> ${errorResponse.error}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        `;
+                        $('#columnSelection').prepend(errorAlert);
+                    } else {
+                        alert('Error processing data: ' + error);
+                    }
                 }
             });
         }
@@ -700,10 +757,8 @@
             $('#results').show();
             $('#newPrediction').show();
             
-            // Simpan column_types dari response
             column_types = response.column_types || {};
             
-            // Display metrics
             const report = response.report;
             let metricsHtml = '';
             for (let className in report) {
@@ -718,7 +773,6 @@
                 }
             }
             
-            // Tambahkan macro avg dan weighted avg
             if (report['macro avg']) {
                 metricsHtml += `
                     <tr class="table-info">

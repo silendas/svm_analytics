@@ -17,29 +17,25 @@ import logging
 import warnings
 import time
 
-# Matikan warning
+app = Flask(__name__)
+logging.basicConfig(level=logging.DEBUG)
+
 warnings.simplefilter(action='ignore', category=Warning)
 pd.options.mode.chained_assignment = None
 
-logging.basicConfig(level=logging.DEBUG)
-
-app = Flask(__name__)
-
-# Variabel global untuk menyimpan model dan label encoder
 model = None
 label_encoders = {}
 X_columns = []
 y_column = ''
 
-# Variabel global untuk menyimpan encoding manual
 manual_encodings = {}
 
 def debug_dataframe(df, stage=""):
-    logging.debug(f"\n=== DataFrame Info ({stage}) ===")
-    logging.debug(f"Shape: {df.shape}")
-    logging.debug(f"Columns: {df.columns.tolist()}")
-    logging.debug(f"Target unique values: {df[y_column].unique()}")
-    logging.debug(f"Sample data:\n{df.head()}")
+    logging.debug("\n=== DataFrame Info ({}) ===".format(stage))
+    logging.debug("Shape: {}".format(df.shape))
+    logging.debug("Columns: {}".format(df.columns.tolist()))
+    logging.debug("Target unique values: {}".format(df[y_column].unique()))
+    logging.debug("Sample data:\n{}".format(df.head()))
     logging.debug("="*50)
 
 @app.route('/')
@@ -54,7 +50,6 @@ def upload_file():
     else:
         df = pd.read_csv(file)
     
-    # Simpan DataFrame ke variabel global
     globals()['last_uploaded_file'] = df
     
     columns = df.columns.tolist()
@@ -73,14 +68,27 @@ def process_data():
         
     df = globals()['last_uploaded_file'].copy()
     
-    # Simpan tipe data kolom
-    column_types = {col: str(df[col].dtype) for col in X_columns}
-    
     try:
-        # 1. Handle missing values
+        column_types = {}
+        for column in df.columns:
+            if df[column].dtype == 'object':
+                column_types[column] = 'categorical'
+            elif np.issubdtype(df[column].dtype, np.number):
+                if df[column].dtype in ['int64', 'int32']:
+                    column_types[column] = 'integer'
+                else:
+                    column_types[column] = 'float'
+            else:
+                column_types[column] = 'unknown'
+
         df = df.dropna()
         
-        # 2. Encoding untuk fitur kategorikal
+        unique_classes = df[y_column].nunique()
+        if unique_classes < 2:
+            return jsonify({
+                'error': f'Kolom target {y_column} hanya memiliki {unique_classes} kelas unik. Dibutuhkan minimal 2 kelas untuk klasifikasi.'
+            }), 400
+        
         for column in X_columns:
             if df[column].dtype == 'object':
                 if column in manual_encodings and manual_encodings[column]:
@@ -90,7 +98,6 @@ def process_data():
                     df[column] = label_encoders[column].fit_transform(df[column])
             df[column] = pd.to_numeric(df[column], errors='coerce')
         
-        # 3. Encoding untuk target
         status_map = {
             'tidak pernah': 0,
             'jarang': 3,
@@ -99,9 +106,12 @@ def process_data():
         }
         
         if df[y_column].dtype == 'object':
-            df[y_column] = df[y_column].map(status_map)
+            if any(val.lower() in status_map for val in df[y_column].unique()):
+                df[y_column] = df[y_column].str.lower().map(status_map)
+            else:
+                label_encoders[y_column] = LabelEncoder()
+                df[y_column] = label_encoders[y_column].fit_transform(df[y_column])
         
-        # 4. Kategorikan target untuk klasifikasi
         def categorize_score(score):
             if score <= 3:
                 return 0  # Sehat
@@ -112,44 +122,46 @@ def process_data():
 
         df['category'] = df[y_column].apply(categorize_score)
         
-        # 5. Persiapkan data untuk model - Perbaiki warning DataFrame
-        X = df[X_columns].copy()  # Tambahkan .copy()
+        unique_categories = df['category'].nunique()
+        if unique_categories < 2:
+            return jsonify({
+                'error': f'Variabel target (Y) diproses hanya menghasilkan {unique_categories} kategori. ' +
+                        'Pastikan variabel target memiliki variasi nilai yang cukup untuk menghasilkan ' +
+                        'minimal 2 kategori (Sehat, Berisiko Rendah, atau Berisiko Tinggi). ' +
+                        'Coba periksa distribusi nilai pada kolom target.'
+            }), 400
+        
+        X = df[X_columns].copy()
         y = df['category'].copy()
         
-        # Scaling langsung tanpa polynomial features
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
         
-        # Parameter grid yang lebih sederhana
         param_grid = {
-            'svm__C': [1, 10],  # Hanya 2 nilai
-            'svm__gamma': ['scale', 0.1],  # Hanya 2 nilai
-            'svm__kernel': ['rbf']  # Hanya 1 kernel
+            'svm__C': [1, 10],
+            'svm__gamma': ['scale', 0.1],
+            'svm__kernel': ['rbf']
         }
 
-        # Buat pipeline yang lebih sederhana
         pipeline = Pipeline([
             ('svm', SVC(probability=True, 
                        random_state=42,
-                       class_weight='balanced'))  # Tetapkan class_weight
+                       class_weight='balanced'))
         ])
 
-        # Kurangi cross-validation
         cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
         
-        # Gunakan RandomizedSearchCV yang lebih cepat
         random_search = RandomizedSearchCV(
             pipeline,
             param_distributions=param_grid,
-            n_iter=5,  # Hanya coba 5 kombinasi
+            n_iter=3,
             cv=cv,
             scoring='accuracy',
-            n_jobs=-1,  # Gunakan semua CPU core
-            verbose=1,
+            n_jobs=None,
+            verbose=0,
             random_state=42
         )
 
-        # Split data dengan rasio yang lebih kecil untuk testing
         X_train, X_test, y_train, y_test = train_test_split(
             X_scaled, y,
             test_size=0.2,
@@ -157,7 +169,6 @@ def process_data():
             stratify=y
         )
 
-        # Latih model
         logging.info("Memulai pencarian parameter...")
         start_time = time.time()
         
@@ -167,32 +178,29 @@ def process_data():
         end_time = time.time()
         logging.info(f"Pencarian parameter selesai dalam {end_time - start_time:.2f} detik")
 
-        # Evaluasi
         y_pred = model.predict(X_test)
         accuracy = accuracy_score(y_test, y_pred)
         
-        # Jika akurasi rendah, gunakan ensemble
         if accuracy < 0.6:
             estimators = [
                 ('svm', model),
                 ('dt', DecisionTreeClassifier(
                     random_state=42, 
                     class_weight='balanced',
-                    max_depth=5  # Batasi kedalaman untuk mencegah overfitting
+                    max_depth=5
                 ))
             ]
             
             ensemble = VotingClassifier(
                 estimators=estimators, 
                 voting='soft',
-                n_jobs=-1
+                n_jobs=None
             )
             ensemble.fit(X_train, y_train)
             y_pred = ensemble.predict(X_test)
             accuracy = accuracy_score(y_test, y_pred)
             model = ensemble
         
-        # Classification report
         target_names = ['Sehat', 'Berisiko Rendah', 'Berisiko Tinggi']
         report = classification_report(
             y_test, 
@@ -202,11 +210,9 @@ def process_data():
             zero_division=1
         )
         
-        # PCA untuk visualisasi
         pca = PCA(n_components=2)
         X_pca = pca.fit_transform(X_scaled)
         
-        # Plot hasil
         plt.figure(figsize=(12, 8))
         colors = ['#2ecc71', '#f1c40f', '#e74c3c']
         
@@ -229,7 +235,6 @@ def process_data():
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
         
-        # Simpan plot
         img = io.BytesIO()
         plt.savefig(img, format='png', bbox_inches='tight', dpi=300)
         img.seek(0)
@@ -262,7 +267,6 @@ def predict():
         data = request.json
         input_data = {}
         
-        # Encoding input data
         for column in X_columns:
             if column not in data:
                 return jsonify({'error': f'Missing column: {column}'}), 400
@@ -276,17 +280,13 @@ def predict():
             else:
                 input_data[column] = float(value)
         
-        # Buat DataFrame
         input_df = pd.DataFrame([input_data])
         
-        # Normalisasi input
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(input_df)
         
-        # Prediksi
         prediction = int(model.predict(X_scaled)[0])
         
-        # Konversi ke status
         status_map = {
             0: "Sehat",
             1: "Berisiko Rendah",
@@ -344,19 +344,15 @@ def get_sample_predictions():
         sample_size = 5
         predictions = []
         
-        # Generate sample data
         for _ in range(sample_size):
             sample_data = {}
             for column in X_columns:
                 if column in manual_encodings:
-                    # Untuk kolom kategorikal
                     values = list(manual_encodings[column].keys())
                     sample_data[column] = np.random.choice(values)
                 else:
-                    # Untuk kolom numerik
                     sample_data[column] = np.random.randint(0, 11)
             
-            # Transformasi data
             input_data = {}
             for column, value in sample_data.items():
                 if column in manual_encodings:
@@ -364,11 +360,9 @@ def get_sample_predictions():
                 else:
                     input_data[column] = float(value)
             
-            # Prediksi
             input_df = pd.DataFrame([input_data])
             prediction = model.predict(input_df)[0]
             
-            # Tambahkan ke hasil
             predictions.append({
                 'input_data': sample_data,
                 'prediction': float(prediction)
@@ -379,6 +373,25 @@ def get_sample_predictions():
     except Exception as e:
         print(f"Error generating sample predictions: {str(e)}")
         return jsonify({'error': str(e)}), 500
+    
+@app.route('/check_valid_y_columns', methods=['POST'])
+def check_valid_y_columns():
+    if 'last_uploaded_file' not in globals():
+        return jsonify({'error': 'No file uploaded'}), 400
+        
+    df = globals()['last_uploaded_file']
+    valid_columns = []
+    
+    for column in df.columns:
+        unique_values = df[column].nunique()
+        if unique_values >= 3:
+            valid_columns.append(column)
+    
+    return jsonify({
+        'valid_columns': valid_columns
+    })
+
+application = app
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    application.run()
