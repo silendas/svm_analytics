@@ -101,7 +101,15 @@
     <div class="container">
         <div class="card">
             <div class="card-header bg-primary text-white">
-                <h4 class="mb-0">Tabel Data</h4>
+                <div class="d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">Tabel Data</h4>
+                    <span class="badge bg-light text-dark">
+                        Total Data: {{ total_records }} 
+                        {% if records_data|length < total_records %}
+                            (Menampilkan 50 data terakhir)
+                        {% endif %}
+                    </span>
+                </div>
             </div>
             <div class="card-body">
                 <div class="table-responsive">
@@ -237,7 +245,12 @@
                         return;
                     }
                     
-                    Object.entries(recordsData).forEach(([recordId, record], index) => {
+                    // Urutkan data berdasarkan key (timestamp) secara descending
+                    const sortedRecords = Object.entries(recordsData)
+                        .sort((a, b) => b[0].localeCompare(a[0]))
+                        .slice(0, 50); // Ambil hanya 50 data terakhir
+                    
+                    sortedRecords.forEach(([recordId, record], index) => {
                         const tr = $('<tr>');
                         tr.append(`<td>${index + 1}</td>`);
                         

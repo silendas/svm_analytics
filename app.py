@@ -97,17 +97,17 @@ def load_training_data():
         
         print(f"\nShape data awal - X: {X.shape}, y: {y.shape}")
         
-        # Pipeline preprocessing dan model dengan parameter yang lebih sesuai
+        # Pipeline preprocessing dan model dengan parameter yang lebih seimbang
         pipeline = Pipeline([
             ('scaler', StandardScaler()),
             ('svm', SVC(
                 kernel='rbf',
                 probability=True,
-                C=1.0,  # Nilai C yang lebih kecil untuk mengurangi overfitting
-                gamma='auto',
-                class_weight='balanced',
+                C=2.5,  # Nilai C yang lebih moderat
+                gamma=0.05,  # Nilai gamma yang lebih kecil untuk mengurangi overfitting
+                class_weight={0: 1.2, 1: 1.0, 2: 1.2},  # Bobot kelas yang lebih seimbang
                 random_state=42,
-                max_iter=5000
+                max_iter=6000
             ))
         ])
         
@@ -469,23 +469,36 @@ def manage_data():
             
         # Ambil data records
         response = requests.get(f'{FIREBASE_URL}/data_model/data.json')
-        records_data = response.json()
+        all_records = response.json() or {}
         
-        # Konversi list ke dictionary jika diperlukan
-        if isinstance(records_data, list):
-            records_data = {str(idx): record for idx, record in enumerate(records_data)}
-        elif records_data is None:
+        # Hitung total data
+        total_records = len(all_records)
+        
+        # Ambil hanya 50 data terakhir
+        if isinstance(all_records, dict):
+            # Urutkan berdasarkan key (timestamp) secara descending
+            sorted_keys = sorted(all_records.keys(), reverse=True)
+            # Ambil 50 key terakhir
+            last_50_keys = sorted_keys[:50]
+            # Buat dictionary baru dengan 50 data terakhir
+            records_data = {k: all_records[k] for k in last_50_keys}
+        else:
             records_data = {}
+        
+        print(f"Total records: {total_records}")
+        print(f"Displayed records: {len(records_data)}")
         
         return render_template('manage_data.html', 
                              columns_data=columns_data,
-                             records_data=records_data)
+                             records_data=records_data,
+                             total_records=total_records)
                              
     except Exception as e:
         print(f"Error loading data: {str(e)}")
         return render_template('manage_data.html', 
                              columns_data={},
                              records_data={},
+                             total_records=0,
                              error="Gagal memuat data")
 
 @app.route('/api/questions', methods=['GET', 'POST'])
