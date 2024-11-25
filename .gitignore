@@ -1,3 +1,18 @@
+# Ignore everything
+*
+
+# But not these files...
+!.gitignore
+!README.md
+!app.py
+!requirements.txt
+!templates/
+!templates/index.html
+
+# Ignore all files in templates except index.html
+templates/*
+!templates/index.html
+
 # Python cache
 __pycache__/
 *.py[cod]
