@@ -1,387 +1,308 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Analisis Kesehatan Mental dengan SVM</title>
+    <title>Prediksi Kesehatan Mental dengan SVM</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
     <style>
         body {
-            background-color: #f8f9fa;
-            font-family: 'Poppins', sans-serif;
-            color: #2c3e50;
-            line-height: 1.6;
+            background-color: #f0f2f5;
+            font-family: Arial, sans-serif;
         }
 
-        .container {
-            max-width: 1200px;
-            padding: 2rem;
+        .header-section {
+            background: #ffffff;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
 
         .main-title {
             color: #2c3e50;
-            margin-bottom: 2.5rem;
-            text-align: center;
+            font-size: 2rem;
             font-weight: 600;
-            position: relative;
-            padding-bottom: 1rem;
+            margin-bottom: 0.5rem;
         }
 
-        .main-title:after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 100px;
-            height: 3px;
-            background: linear-gradient(to right, #007bff, #00d2ff);
-            border-radius: 2px;
+        .subtitle {
+            color: #6c757d;
+            font-size: 1rem;
+            margin-bottom: 0;
         }
 
         .card {
             border: none;
-            border-radius: 15px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
-            transition: all 0.3s ease;
-            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
             margin-bottom: 2rem;
         }
 
-        .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-        }
-
         .card-header {
-            background: linear-gradient(45deg, #f8f9fa, #ffffff);
-            border-bottom: 1px solid rgba(0,0,0,0.05);
-            border-radius: 15px 15px 0 0 !important;
-            padding: 1.5rem;
-        }
-
-        .step-number {
-            background: linear-gradient(45deg, #007bff, #00d2ff);
+            background: #4a90e2;
             color: white;
-            padding: 8px 16px;
-            border-radius: 50px;
-            margin-right: 12px;
-            font-size: 0.9rem;
-            font-weight: 500;
-        }
-
-        .form-control, .form-select {
-            border-radius: 10px;
-            border: 1px solid #e0e6ed;
-            padding: 0.75rem 1rem;
-            transition: all 0.3s;
-        }
-
-        .form-control:focus, .form-select:focus {
-            border-color: #007bff;
-            box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.15);
-        }
-
-        .btn {
-            padding: 0.75rem 1.5rem;
-            border-radius: 10px;
-            font-weight: 500;
-            transition: all 0.3s;
-        }
-
-        .btn-primary {
-            background: linear-gradient(45deg, #007bff, #00d2ff);
-            border: none;
-        }
-
-        .btn-primary:hover {
-            background: linear-gradient(45deg, #0056b3, #00a6cc);
-            transform: translateY(-2px);
-        }
-
-        .btn-secondary {
-            background: #6c757d;
-            border: none;
-        }
-
-        .btn-secondary:hover {
-            background: #5a6268;
-            transform: translateY(-2px);
-        }
-
-        .alert {
-            border-radius: 10px;
+            border-radius: 12px 12px 0 0 !important;
             padding: 1rem 1.5rem;
+        }
+
+        .question-card {
+            background: #ffffff;
+            border-left: 4px solid #4a90e2;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            height: calc(100% - 1.5rem);
+            transition: transform 0.2s;
+        }
+
+        .question-card:hover {
+            transform: translateX(5px);
+        }
+
+        .question-content {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-label {
+            color: #2c3e50;
+            font-size: 1rem;
+            margin-bottom: 0.75rem;
+            flex-grow: 1;
+        }
+
+        .form-select {
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.95rem;
+            transition: all 0.3s;
+        }
+
+        .form-select:focus {
+            border-color: #4a90e2;
+            box-shadow: 0 0 0 0.2rem rgba(74, 144, 226, 0.25);
+        }
+
+        .btn-manage {
+            background-color: #ffffff;
+            color: #4a90e2;
+            border: 2px solid #4a90e2;
+            border-radius: 8px;
+            padding: 0.75rem 1.5rem;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .btn-manage:hover {
+            background-color: #4a90e2;
+            color: #ffffff;
+            transform: translateY(-2px);
+        }
+
+        .btn-submit {
+            background: #4a90e2;
+            color: white;
             border: none;
-            margin-top: 1rem;
+            border-radius: 8px;
+            padding: 1rem 2rem;
+            font-weight: 500;
+            transition: all 0.3s;
         }
 
-        .table {
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 0 15px rgba(0,0,0,0.05);
+        .btn-submit:hover {
+            background: #357abd;
+            transform: translateY(-2px);
         }
 
-        .table thead th {
-            background: #f8f9fa;
-            border-bottom: 2px solid #e9ecef;
-            font-weight: 600;
+        .manage-section {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
         }
 
-        .form-check-input:checked {
-            background-color: #007bff;
-            border-color: #007bff;
+        .manage-text {
+            color: #6c757d;
+            font-size: 0.9rem;
+            margin: 0;
         }
 
         @media (max-width: 768px) {
-            .container {
-                padding: 1rem;
-            }
-
-            .card-body {
-                padding: 1rem;
-            }
-
-            .btn {
+            .col-md-6 {
                 width: 100%;
-                margin-bottom: 0.5rem;
             }
-
-            .d-flex {
-                flex-direction: column;
-            }
-
-            .table-responsive {
-                margin: 0 -1rem;
+            
+            .question-card {
+                height: auto;
             }
         }
 
-        #predictionInputs .mb-3 {
-            background: #f8f9fa;
+        .console-log {
+            background: #1e1e1e;
+            color: #fff;
             padding: 1rem;
-            border-radius: 10px;
-            margin-bottom: 1rem !important;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            max-height: 300px;
+            overflow-y: auto;
+            line-height: 1.5;
         }
 
-        #predictionInputs label {
-            font-weight: 500;
+        .log-entry {
             margin-bottom: 0.5rem;
-            color: #2c3e50;
-        }
-
-        #predictionResult .alert {
-            font-size: 1.1rem;
-            text-align: center;
-        }
-
-        .button-group {
+            padding: 0.25rem 0;
             display: flex;
-            gap: 1rem;
-            margin-top: 1.5rem;
+            align-items: center;
         }
 
-        @media (max-width: 576px) {
-            .button-group {
-                flex-direction: column;
-            }
+        .log-entry::before {
+            content: '>';
+            margin-right: 0.5rem;
+            color: #4a90e2;
         }
 
-        .plot-container {
-            background: white;
-            padding: 1rem;
-            border-radius: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        
-        .legend {
-            text-align: center;
-        }
-        
-        .legend .badge {
-            margin: 0 5px;
-            padding: 8px 15px;
-        }
-        
-        .metrics-value {
-            font-weight: 600;
-            color: #007bff;
-        }
-        
-        .section-title {
-            color: #2c3e50;
-            margin-bottom: 1rem;
-            padding-bottom: 0.5rem;
-            border-bottom: 2px solid #e9ecef;
+        .log-entry.collection {
+            color: #4a90e2;
         }
 
-        #loadingIndicator {
-            background: rgba(255,255,255,0.9);
-            padding: 2rem;
-            border-radius: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        .log-entry.preprocessing {
+            color: #f39c12;
         }
 
-        .spinner-border {
-            width: 3rem;
-            height: 3rem;
+        .log-entry.prediction {
+            color: #2ecc71;
         }
 
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
+        .log-entry.warning {
+            color: #e74c3c;
         }
 
-        #loadingIndicator {
-            animation: fadeIn 0.3s ease-in;
+        .log-entry.success {
+            color: #2ecc71;
+        }
+
+        #processTitle.bg-collection {
+            background-color: #4a90e2 !important;
+        }
+
+        #processTitle.bg-preprocessing {
+            background-color: #f39c12 !important;
+        }
+
+        #processTitle.bg-prediction {
+            background-color: #2ecc71 !important;
         }
     </style>
 </head>
 <body>
-    <div class="container mt-5">
-        <h2 class="main-title text-center">Analisis Kesehatan Mental dengan SVM</h2>
-        
-        <!-- File Upload -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h4><span class="step-number">1</span>Upload Dataset</h4>
-            </div>
-            <div class="card-body">
-                <div class="mb-3">
-                    <input type="file" id="fileInput" accept=".csv,.xlsx" class="form-control">
-                    <div class="form-text text-muted mt-2">
-                        <i class="fas fa-info-circle me-1"></i>
-                        Format file yang didukung:
-                        <ul class="mt-1 mb-0">
-                            <li>Excel (.xlsx)</li>
-                            <li>CSV (.csv)</li>
-                        </ul>
-                        <small class="d-block mt-1">
-                            <strong>Catatan:</strong> Pastikan file dataset Anda dalam format Excel (.xlsx) atau CSV (.csv) dan berisi data yang valid.
-                        </small>
+    <div class="header-section">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="main-title">Prediksi Kesehatan Mental dengan SVM</h1>
+                    <p class="subtitle">Sistem Prediksi Berbasis Support Vector Machine</p>
+                </div>
+                <div class="manage-section">
+                    <div class="text-end">
+                        <p class="manage-text">Area Administrator</p>
+                        <p class="manage-text">Kelola Data & Pertanyaan</p>
                     </div>
+                    <a href="/manage" class="btn btn-manage">
+                        <i class="bi bi-gear-fill me-2"></i>
+                        Kelola Data
+                    </a>
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- Column Selection -->
-        <div id="columnSelection" class="card mb-4" style="display:none;">
+    <div class="container">
+        <div class="card">
             <div class="card-header">
-                <h4><span class="step-number">2</span>Pilih Kolom</h4>
+                <h4 class="mb-0">
+                    <i class="bi bi-clipboard-check me-2"></i>
+                    Kuisioner Kesehatan Mental
+                </h4>
             </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <h5 class="mb-3">Kolom Input (X)</h5>
-                        <div class="form-check mb-3">
-                            <input class="form-check-input x-column-checkbox" type="checkbox" id="selectAllX">
-                            <label class="form-check-label" for="selectAllX">
-                                <strong>Pilih Semua</strong>
-                            </label>
-                        </div>
-                        <div id="xColumns"></div>
-                    </div>
-                    <div class="col-md-6">
-                        <h5 class="mb-3">Kolom Target (Y)</h5>
-                        <select class="form-select" id="yColumn"></select>
-                        <div class="form-text text-muted mt-2">
-                            <i class="fas fa-info-circle me-1"></i>
-                            Catatan:
-                            <ul class="mt-1 mb-0">
-                                <li>Hanya menampilkan kolom yang memiliki minimal 3 nilai unik</li>
-                                <li>Kolom yang tidak memenuhi syarat akan otomatis disembunyikan</li>
-                                <li>Nilai unik diperlukan untuk klasifikasi: Sehat, Berisiko Rendah, dan Berisiko Tinggi</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-                <div class="d-flex justify-content-end mt-3">
-                    <button onclick="checkCategoricalColumns()" class="btn btn-secondary me-2">
-                        Set Nilai Kategorikal
-                    </button>
-                    <button onclick="processData()" class="btn btn-primary">
-                        Proses Data
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Results -->
-        <div id="results" style="display:none;">
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h4><span class="step-number">3</span>Hasil Analisis</h4>
-                </div>
-                <div class="card-body">
-                    <!-- Metrics -->
-                    <div class="table-responsive mb-4">
-                        <h5 class="section-title">Metrics</h5>
-                        <table class="table table-hover" id="metricsTable">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Kategori</th>
-                                    <th>Precision</th>
-                                    <th>Recall</th>
-                                    <th>F1-Score</th>
-                                </tr>
-                            </thead>
-                            <tbody></tbody>
-                        </table>
-                        <p class="mt-3">Accuracy: <span id="accuracy" class="metrics-value"></span></p>
-                        
-                        <!-- Tambahkan bagian untuk explained variance -->
-                        <div class="mt-4">
-                            <h6 class="section-title">Explained Variance Ratio</h6>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <p>PC1: <span id="pc1_variance" class="metrics-value"></span></p>
-                                </div>
-                                <div class="col-md-6">
-                                    <p>PC2: <span id="pc2_variance" class="metrics-value"></span></p>
+            <div class="card-body p-4">
+                <form id="questionForm">
+                    <div class="row">
+                        {% for question in questions %}
+                        <div class="col-md-6">
+                            <div class="question-card">
+                                <div class="question-content">
+                                    <label class="form-label">{{ question.original_name }}</label>
+                                    {% if question.type == "number" %}
+                                        <input type="number" 
+                                               class="form-control" 
+                                               name="{{ loop.index0 }}"
+                                               min="{{ question.min }}" 
+                                               max="{{ question.max }}" 
+                                               placeholder="Opsional">
+                                    {% else %}
+                                        <select class="form-select" name="{{ loop.index0 }}">
+                                            <option value="">Pilih jawaban (opsional)...</option>
+                                            {% for option in question.options %}
+                                                <option value="{{ option.value }}">{{ option.original_name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    {% endif %}
                                 </div>
                             </div>
                         </div>
+                        {% endfor %}
                     </div>
+                    
+                    <div class="text-center mt-4">
+                        <button type="button" class="btn btn-secondary me-2" id="btnRandomFill">
+                            <i class="bi bi-shuffle me-2"></i>
+                            Isi Acak
+                        </button>
+                        <button type="reset" class="btn btn-secondary me-2">
+                            <i class="bi bi-arrow-counterclockwise me-2"></i>
+                            Reset
+                        </button>
+                        <button type="submit" class="btn btn-submit">
+                            <i class="bi bi-graph-up me-2"></i>
+                            Proses Data
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 
-                    <!-- Plot -->
-                    <div class="mb-4">
-                        <h5 class="section-title">Visualisasi PCA dan Klasifikasi</h5>
-                        <div class="plot-container">
-                            <img id="regressionPlot" class="img-fluid">
-                            <div class="legend mt-3">
-                                <span class="badge bg-success">Sehat</span>
-                                <span class="badge bg-warning text-dark">Berisiko Rendah</span>
-                                <span class="badge bg-danger">Berisiko Tinggi</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Sample Predictions -->
-                    <div>
-                        <h5 class="section-title">Sample Predictions</h5>
-                        <div id="samplePredictions"></div>
-                    </div>
+    <div class="modal fade" id="resultModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-clipboard-data me-2"></i>
+                        Hasil Prediksi
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="predictionResult"></div>
+                    <div id="visualizationArea"></div>
+                    <div id="metricsArea"></div>
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- New Prediction -->
-        <div id="newPrediction" class="card mb-4" style="display:none;">
-            <div class="card-header">
-                <h4><span class="step-number">4</span>Prediksi Data Baru</h4>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-lg-8 mx-auto">
-                        <div id="predictionInputs" class="mb-4"></div>
-                        <div class="button-group">
-                            <button onclick="predict()" class="btn btn-primary">
-                                <i class="fas fa-chart-line me-2"></i>Prediksi
-                            </button>
-                            <button onclick="resetPredictionForm()" class="btn btn-secondary">
-                                <i class="fas fa-undo me-2"></i>Reset
-                            </button>
-                        </div>
-                        <div id="predictionResult" class="mt-4"></div>
-                    </div>
+    <div class="modal fade" id="processModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <span id="processTitle" class="badge bg-primary">Pengumpulan Data</span>
+                        <span id="processStatus" class="ms-2">Sedang Memproses...</span>
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="processLog" class="console-log mb-4"></div>
                 </div>
             </div>
         </div>
@@ -390,599 +311,195 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        let selectedXColumns = [];
-        let selectedYColumn = '';
-        let manual_encodings = {};
-        let column_types = {};
-
-        $('#fileInput').change(function() {
-            const file = this.files[0];
-            const formData = new FormData();
-            formData.append('file', file);
-
-            $.ajax({
-                url: '/upload',
-                type: 'POST',
-                data: formData,
-                processData: false,
-                contentType: false,
-                success: function(response) {
-                    displayColumnSelection(response.columns);
+    $(document).ready(function() {
+        // Fungsi untuk mengisi form secara acak
+        $('#btnRandomFill').click(function() {
+            $('input[type="number"], select').each(function() {
+                const $input = $(this);
+                if ($input.attr('type') === 'number') {
+                    const min = parseInt($input.attr('min'));
+                    const max = parseInt($input.attr('max'));
+                    $input.val(Math.floor(Math.random() * (max - min + 1)) + min);
+                } else {
+                    const $options = $input.find('option:not([value=""])');
+                    const randomIndex = Math.floor(Math.random() * $options.length);
+                    $input.val($options.eq(randomIndex).val());
                 }
             });
         });
 
-        function displayColumnSelection(columns) {
-            $('#columnSelection').show();
+        // Handler submit form
+        $('#questionForm').submit(function(e) {
+            e.preventDefault();
             
-            const xColumnsHtml = columns.map(column => 
-                `<div class="form-check">
-                    <input class="form-check-input x-column-checkbox" type="checkbox" value="${column}" id="x_${column}">
-                    <label class="form-check-label" for="x_${column}">${column}</label>
-                </div>`
-            ).join('');
-            $('#xColumns').html(xColumnsHtml);
-
-            $.ajax({
-                url: '/check_valid_y_columns',
-                type: 'POST',
-                contentType: 'application/json',
-                success: function(response) {
-                    const validYColumns = response.valid_columns;
-                    
-                    const yColumnsHtml = columns
-                        .filter(column => validYColumns.includes(column))
-                        .map(column => `<option value="${column}">${column}</option>`)
-                        .join('');
-                    
-                    if (yColumnsHtml) {
-                        $('#yColumn').html(yColumnsHtml);
-                    } else {
-                        $('#yColumn').html(`
-                            <option value="">Tidak ada kolom yang memenuhi syarat (min. 3 nilai unik)</option>
-                        `);
-                        const alertHtml = `
-                            <div class="alert alert-warning alert-dismissible fade show mt-2" role="alert">
-                                <strong>Perhatian!</strong> Tidak ada kolom yang memenuhi syarat sebagai target (Y).
-                                Kolom target harus memiliki minimal 3 nilai unik.
-                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                            </div>
-                        `;
-                        $('#yColumn').after(alertHtml);
-                    }
-                },
-                error: function(error) {
-                    console.error("Error checking valid Y columns:", error);
-                    $('#yColumn').html('<option value="">Error loading columns</option>');
+            // Kumpulkan jawaban (hanya yang diisi)
+            const answers = {};
+            $('input[type="number"], select').each(function() {
+                const value = $(this).val();
+                if (value !== '' && value !== null) {  // Hanya ambil yang diisi
+                    answers[$(this).attr('name')] = value;
                 }
             });
-
-            $('#selectAllX').change(function() {
-                const isChecked = $(this).prop('checked');
-                $('.x-column-checkbox').prop('checked', isChecked);
-            });
-
-            $('.x-column-checkbox').change(function() {
-                const totalCheckboxes = $('.x-column-checkbox').length;
-                const checkedCheckboxes = $('.x-column-checkbox:checked').length;
-                $('#selectAllX').prop('checked', totalCheckboxes === checkedCheckboxes);
-                $('#selectAllX').prop('indeterminate', checkedCheckboxes > 0 && checkedCheckboxes < totalCheckboxes);
-            });
-        }
-
-        function checkCategoricalColumns() {
-            const selectedColumns = [];
-            $('input[type=checkbox]:checked').each(function() {
-                selectedColumns.push($(this).val());
-            });
-            selectedColumns.push($('#yColumn').val());
-
-            $.ajax({
-                url: '/check_categorical',
-                type: 'POST',
-                data: JSON.stringify({
-                    'columns': selectedColumns
-                }),
-                contentType: 'application/json',
-                success: function(response) {
-                    showEncodingModal(response.categorical_columns, response.unique_values);
-                }
-            });
-        }
-
-        function showEncodingModal(categoricalColumns, uniqueValues) {
-            const modalHtml = `
-                <div class="modal fade" id="encodingModal" tabindex="-1">
-                    <div class="modal-dialog modal-lg">
-                        <div class="modal-content">
-                            <div class="modal-header bg-primary text-white">
-                                <h5 class="modal-title">Set Nilai Kategorikal</h5>
-                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                            </div>
-                            <div class="modal-body">
-                                <div class="alert alert-info mb-4">
-                                    <i class="fas fa-info-circle me-2"></i>
-                                    Mohon set nilai untuk setiap kategori sebelum melanjutkan proses.
-                                </div>
-                                <form id="encodingForm">
-                                    ${Object.entries(uniqueValues).map(([column, values], index) => `
-                                        <div class="category-section mb-4">
-                                            <div class="category-header p-3 mb-3" 
-                                                 style="background: ${getHeaderColor(index)}; 
-                                                        border-radius: 10px; 
-                                                        color: white;
-                                                        box-shadow: 0 2px 4px rgba(0,0,0,0.1)">
-                                                <h6 class="mb-0 d-flex align-items-center">
-                                                    <span class="badge bg-white text-dark me-2">${index + 1}</span>
-                                                    ${column}
-                                                </h6>
-                                            </div>
-                                            <div class="category-content ps-3">
-                                                ${values.map(value => `
-                                                    <div class="mb-3">
-                                                        <label class="form-label text-muted">${value}</label>
-                                                        <select class="form-select" name="${column}___${value}" required>
-                                                            <option value="">Pilih nilai...</option>
-                                                            <option value="0">0 (Sangat Baik)</option>
-                                                            <option value="1">1 (Baik)</option>
-                                                            <option value="2">2 (Cukup Baik)</option>
-                                                            <option value="3">3 (Baik dengan Catatan)</option>
-                                                            <option value="4">4 (Cukup)</option>
-                                                            <option value="5">5 (Sedang)</option>
-                                                            <option value="6">6 (Kurang)</option>
-                                                            <option value="7">7 (Cukup Buruk)</option>
-                                                            <option value="8">8 (Buruk)</option>
-                                                            <option value="9">9 (Sangat Buruk)</option>
-                                                            <option value="10">10 (Ekstrem Buruk)</option>
-                                                        </select>
-                                                    </div>
-                                                `).join('')}
-                                            </div>
-                                        </div>
-                                    `).join('')}
-                                </form>
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                                    <i class="fas fa-times me-2"></i>Tutup
-                                </button>
-                                <button type="button" class="btn btn-primary" onclick="saveEncoding()">
-                                    <i class="fas fa-save me-2"></i>Simpan
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            function getHeaderColor(index) {
-                const colors = [
-                    'linear-gradient(45deg, #007bff, #00d2ff)',
-                    'linear-gradient(45deg, #28a745, #84c991)',
-                    'linear-gradient(45deg, #6f42c1, #a885d8)',
-                    'linear-gradient(45deg, #fd7e14, #ffb474)',
-                    'linear-gradient(45deg, #20c997, #63e6c7)'
-                ];
-                return colors[index % colors.length];
-            }
-
-            if (!$('#encodingModal').length) {
-                $('body').append(modalHtml);
-            }
-
-            const style = `
-                <style>
-                    .category-section {
-                        transition: all 0.3s ease;
-                    }
-                    .category-section:hover {
-                        transform: translateX(5px);
-                    }
-                    .category-header {
-                        transition: all 0.3s ease;
-                    }
-                    .category-header:hover {
-                        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-                    }
-                    .form-select {
-                        transition: all 0.3s ease;
-                    }
-                    .form-select:focus {
-                        transform: translateX(5px);
-                    }
-                    .modal-content {
-                        border: none;
-                        border-radius: 15px;
-                    }
-                    .modal-header {
-                        border-radius: 15px 15px 0 0;
-                    }
-                    .badge {
-                        font-size: 0.8rem;
-                        padding: 0.5em 0.8em;
-                    }
-                </style>
-            `;
             
-            if (!$('style[data-custom-style="encoding-modal"]').length) {
-                $('head').append(style);
-            }
-
-            const modal = new bootstrap.Modal(document.getElementById('encodingModal'));
-            modal.show();
-        }
-
-        function saveEncoding() {
-            const encodingData = {};
-            $('#encodingForm select').each(function() {
-                const [column, value] = $(this).attr('name').split('___');
-                if (!encodingData[column]) {
-                    encodingData[column] = {};
-                }
-                const selectedValue = $(this).val();
-                if (selectedValue !== '') {
-                    encodingData[column][value] = parseFloat(selectedValue);
-                }
-            });
-
-            manual_encodings = encodingData;
-
-            $.ajax({
-                url: '/save_encoding',
-                type: 'POST',
-                data: JSON.stringify(encodingData),
-                contentType: 'application/json',
-                success: function(response) {
-                    $('#encodingModal').modal('hide');
-                    alert('Pengaturan nilai kategorikal berhasil disimpan!');
-                }
-            });
-        }
-
-        function processData() {
-            selectedXColumns = [];
-            $('.x-column-checkbox:checked').each(function() {
-                selectedXColumns.push($(this).val());
-            });
-            selectedYColumn = $('#yColumn').val();
-            
-            if (selectedXColumns.length === 0) {
-                alert('Pilih minimal satu kolom input (X)');
+            // Validasi minimal harus ada 1 jawaban
+            if (Object.keys(answers).length === 0) {
+                alert('Mohon isi minimal satu pertanyaan');
                 return;
             }
             
-            if (!selectedYColumn) {
-                alert('Pilih kolom target (Y)');
-                return;
-            }
-
-            let hasUnsetCategorical = false;
-            let hasIncompleteEncoding = false;
-
-            $.ajax({
-                url: '/check_categorical',
-                type: 'POST',
-                data: JSON.stringify({
-                    'columns': [...selectedXColumns, selectedYColumn]
-                }),
-                contentType: 'application/json',
-                async: false,
-                success: function(response) {
-                    if (response.categorical_columns.length > 0) {
-                        const unsetColumns = response.categorical_columns.filter(column => 
-                            !(column in manual_encodings) || 
-                            Object.keys(manual_encodings[column]).length === 0
-                        );
-                        
-                        response.categorical_columns.forEach(column => {
-                            if (column in manual_encodings) {
-                                const uniqueValues = response.unique_values[column] || [];
-                                const encodedValues = Object.keys(manual_encodings[column]);
+            // Tampilkan modal proses
+            $('#processModal').modal('show');
+            const logArea = $('#processLog');
+            logArea.empty();
+            
+            // Step 1: Pengumpulan Data
+            $('#processTitle').text('Pengumpulan Data').removeClass().addClass('badge bg-collection');
+            logArea.append('<div class="log-entry collection">Mengumpulkan data input...</div>');
+            
+            setTimeout(() => {
+                logArea.append('<div class="log-entry collection">Data berhasil dikumpulkan.</div>');
+                
+                // Step 2: Preprocessing
+                $('#processTitle').text('Preprocessing Data').removeClass().addClass('badge bg-preprocessing');
+                logArea.append('<div class="log-entry preprocessing">Memulai preprocessing data...</div>');
+                
+                setTimeout(() => {
+                    logArea.append('<div class="log-entry preprocessing">Normalisasi data selesai.</div>');
+                    
+                    // Step 3: Prediksi
+                    $('#processTitle').text('Prediksi SVM').removeClass().addClass('badge bg-prediction');
+                    logArea.append('<div class="log-entry prediction">Menjalankan model SVM...</div>');
+                    
+                    // Kirim data ke server
+                    $.ajax({
+                        url: '/submit_answers',
+                        type: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify(answers),
+                        success: function(response) {
+                            if (response.error) {
+                                logArea.append(`<div class="log-entry warning">Error: ${response.error}</div>`);
+                            } else {
+                                logArea.append('<div class="log-entry success">Prediksi berhasil.</div>');
                                 
-                                if (uniqueValues.length !== encodedValues.length) {
-                                    hasIncompleteEncoding = true;
-                                    alert(`Beberapa nilai kategori pada kolom "${column}" belum diset!`);
-                                }
+                                setTimeout(() => {
+                                    $('#processModal').modal('hide');
+                                    setTimeout(() => {
+                                        displayResults(response);
+                                        $('#resultModal').modal('show');
+                                    }, 500);
+                                }, 1000);
                             }
-                        });
-                        
-                        if (unsetColumns.length > 0) {
-                            hasUnsetCategorical = true;
-                            alert('Mohon set nilai kategorikal terlebih dahulu untuk kolom: ' + 
-                                  unsetColumns.join(', '));
-                            showEncodingModal(response.categorical_columns, response.unique_values);
+                        },
+                        error: function(xhr, status, error) {
+                            logArea.append(`<div class="log-entry warning">Error: ${error}</div>`);
+                            logArea.append('<div class="log-entry warning">Silakan coba lagi.</div>');
                         }
-                    }
-                }
-            });
+                    });
+                }, 1000);
+            }, 1000);
+        });
+    });
 
-            if (hasUnsetCategorical || hasIncompleteEncoding) {
-                return;
-            }
-
-            const loadingHtml = `
-                <div class="text-center my-4" id="loadingIndicator">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <p class="mt-2">Sedang memproses data...</p>
-                    <small class="text-muted">Ini mungkin memakan waktu beberapa saat karena sedang melakukan optimasi model</small>
+    function displayResults(response) {
+        const resultArea = $('#predictionResult');
+        const visualArea = $('#visualizationArea');
+        const metricsArea = $('#metricsArea');
+        
+        resultArea.html(`
+            <div class="alert ${getAlertClass(response.status)} mb-4">
+                <h4 class="alert-heading mb-3">Hasil Prediksi:</h4>
+                <p class="display-6 mb-0">${response.status}</p>
+                <hr>
+                <div class="mt-3">
+                    <h6>Probabilitas per Kategori:</h6>
+                    <ul class="list-unstyled">
+                        <li><strong>Sehat:</strong> ${response.probabilities["Sehat"]}</li>
+                        <li><strong>Berisiko Ringan:</strong> ${response.probabilities["Berisiko Ringan"]}</li>
+                        <li><strong>Berisiko Berat:</strong> ${response.probabilities["Berisiko Berat"]}</li>
+                    </ul>
                 </div>
-            `;
-
-            $('.modal-footer button').prop('disabled', true);
-            $('#results').hide();
-            $('#newPrediction').hide();
-            $('#columnSelection .btn').prop('disabled', true);
-            $('#columnSelection').append(loadingHtml);
-
-            $.ajax({
-                url: '/process',
-                type: 'POST',
-                data: JSON.stringify({
-                    'X_columns': selectedXColumns,
-                    'y_column': selectedYColumn
-                }),
-                contentType: 'application/json',
-                success: function(response) {
-                    $('#loadingIndicator').remove();
-                    $('.modal-footer button').prop('disabled', false);
-                    $('#columnSelection .btn').prop('disabled', false);
-                    
-                    displayResults(response);
-                    setupPredictionForm();
-                },
-                error: function(xhr, status, error) {
-                    $('#loadingIndicator').remove();
-                    $('.modal-footer button').prop('disabled', false);
-                    $('#columnSelection .btn').prop('disabled', false);
-                    
-                    if (xhr.status === 400) {
-                        const errorResponse = JSON.parse(xhr.responseText);
-                        const errorAlert = `
-                            <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                                <strong>Error!</strong> ${errorResponse.error}
-                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                            </div>
-                        `;
-                        $('#columnSelection').prepend(errorAlert);
-                    } else {
-                        alert('Error processing data: ' + error);
-                    }
-                }
-            });
+                <hr>
+                <div class="mt-3">
+                    <h6>Rekomendasi:</h6>
+                    <p class="mb-0">${response.recommendation}</p>
+                </div>
+            </div>
+        `);
+        
+        if (response.plot) {
+            visualArea.html(`
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Visualisasi Data</h5>
+                    </div>
+                    <div class="card-body">
+                        <img src="data:image/png;base64,${response.plot}" class="img-fluid">
+                    </div>
+                </div>
+            `);
         }
-
-        function displayResults(response) {
-            $('#results').show();
-            $('#newPrediction').show();
-            
-            column_types = response.column_types || {};
-            
-            const report = response.report;
-            let metricsHtml = '';
-            for (let className in report) {
-                if (className !== 'accuracy' && className !== 'macro avg' && className !== 'weighted avg') {
-                    metricsHtml += `
-                        <tr>
-                            <td>${className}</td>
-                            <td>${(report[className].precision * 100).toFixed(2)}%</td>
-                            <td>${(report[className].recall * 100).toFixed(2)}%</td>
-                            <td>${(report[className]['f1-score'] * 100).toFixed(2)}%</td>
-                        </tr>`;
-                }
-            }
-            
-            if (report['macro avg']) {
-                metricsHtml += `
-                    <tr class="table-info">
-                        <td>Macro Avg</td>
-                        <td>${(report['macro avg'].precision * 100).toFixed(2)}%</td>
-                        <td>${(report['macro avg'].recall * 100).toFixed(2)}%</td>
-                        <td>${(report['macro avg']['f1-score'] * 100).toFixed(2)}%</td>
-                    </tr>`;
-            }
-            
-            if (report['weighted avg']) {
-                metricsHtml += `
-                    <tr class="table-info">
-                        <td>Weighted Avg</td>
-                        <td>${(report['weighted avg'].precision * 100).toFixed(2)}%</td>
-                        <td>${(report['weighted avg'].recall * 100).toFixed(2)}%</td>
-                        <td>${(report['weighted avg']['f1-score'] * 100).toFixed(2)}%</td>
-                    </tr>`;
-            }
-            
-            $('#metricsTable tbody').html(metricsHtml);
-            $('#accuracy').text((response.accuracy * 100).toFixed(2) + '%');
-
-            // Display plot
-            if (response.plot) {
-                $('#regressionPlot').attr('src', 'data:image/png;base64,' + response.plot);
-                $('#regressionPlot').show();
-            }
-
-            // Fungsi untuk mendapatkan status berdasarkan nilai prediksi
-            const getStatus = (prediction) => {
-                switch(prediction) {
-                    case 0: return 'Sehat';
-                    case 1: return 'Berisiko Rendah';
-                    case 2: return 'Berisiko Tinggi';
-                    default: return 'Unknown';
-                }
-            };
-
-            // Fungsi untuk mendapatkan warna status
-            const getStatusColor = (status) => {
-                switch(status) {
-                    case 'Sehat': return '#2ecc71';
-                    case 'Berisiko Rendah': return '#f1c40f';
-                    case 'Berisiko Tinggi': return '#e74c3c';
-                    default: return '#95a5a6';
-                }
-            };
-
-            // Buat request untuk sample predictions
-            $.ajax({
-                url: '/get_sample_predictions',
-                type: 'POST',
-                contentType: 'application/json',
-                success: function(sampleResponse) {
-                    const predictionsHtml = `
+        
+        if (response.metrics) {
+            metricsArea.html(`
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Metrik Evaluasi Model</h5>
+                    </div>
+                    <div class="card-body">
                         <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead class="table-light">
+                            <table class="table table-bordered">
+                                <thead>
                                     <tr>
-                                        <th>No.</th>
-                                        ${selectedXColumns.map(col => `<th>${col}</th>`).join('')}
-                                        <th>Prediksi</th>
+                                        <th>Kategori</th>
+                                        <th>Precision</th>
+                                        <th>Recall</th>
+                                        <th>F1-Score</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    ${sampleResponse.predictions.map((pred, i) => {
-                                        const status = getStatus(pred.prediction);
-                                        const color = getStatusColor(status);
-                                        return `
-                                            <tr>
-                                                <td>${i + 1}</td>
-                                                ${selectedXColumns.map(col => `
-                                                    <td>${pred.input_data[col]}</td>
-                                                `).join('')}
-                                                <td>
-                                                    <span class="badge" style="background-color: ${color}; color: ${color === '#f1c40f' ? 'black' : 'white'}">
-                                                        ${status}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        `;
-                                    }).join('')}
+                                    <tr>
+                                        <td>Sehat</td>
+                                        <td>${(response.metrics.report.Sehat.precision * 100).toFixed(2)}%</td>
+                                        <td>${(response.metrics.report.Sehat.recall * 100).toFixed(2)}%</td>
+                                        <td>${(response.metrics.report.Sehat.f1_score * 100).toFixed(2)}%</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Berisiko Ringan</td>
+                                        <td>${(response.metrics.report["Berisiko Ringan"].precision * 100).toFixed(2)}%</td>
+                                        <td>${(response.metrics.report["Berisiko Ringan"].recall * 100).toFixed(2)}%</td>
+                                        <td>${(response.metrics.report["Berisiko Ringan"].f1_score * 100).toFixed(2)}%</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Berisiko Berat</td>
+                                        <td>${(response.metrics.report["Berisiko Berat"].precision * 100).toFixed(2)}%</td>
+                                        <td>${(response.metrics.report["Berisiko Berat"].recall * 100).toFixed(2)}%</td>
+                                        <td>${(response.metrics.report["Berisiko Berat"].f1_score * 100).toFixed(2)}%</td>
+                                    </tr>
                                 </tbody>
+                                <tfoot>
+                                    <tr class="table-primary">
+                                        <td colspan="4">
+                                            <strong>Akurasi:</strong> ${response.metrics.accuracy.toFixed(2)}%
+                                        </td>
+                                    </tr>
+                                </tfoot>
                             </table>
-                        </div>`;
-                    
-                    $('#samplePredictions').html(predictionsHtml);
-                },
-                error: function(xhr, status, error) {
-                    console.error("Error generating sample predictions:", error);
-                    $('#samplePredictions').html('<div class="alert alert-danger">Error generating sample predictions</div>');
-                }
-            });
+                        </div>
+                    </div>
+                </div>
+            `);
         }
+    }
 
-        function setupPredictionForm() {
-            let inputsHtml = '';
-            selectedXColumns.forEach(column => {
-                const safeColumnId = column.replace(/\s+/g, '_');
-                
-                if (column in manual_encodings) {
-                    // Kolom kategorikal
-                    const uniqueValues = Object.keys(manual_encodings[column]);
-                    inputsHtml += `
-                        <div class="mb-3">
-                            <label class="form-label">${column}</label>
-                            <select class="form-select" id="pred_${safeColumnId}" data-column="${column}">
-                                <option value="">Pilih ${column}...</option>
-                                ${uniqueValues.map(value => 
-                                    `<option value="${value}">${value}</option>`
-                                ).join('')}
-                            </select>
-                        </div>`;
-                } else {
-                    // Kolom numerik
-                    const isInteger = column_types[column] && column_types[column].includes('int');
-                    inputsHtml += `
-                        <div class="mb-3">
-                            <label class="form-label">${column}</label>
-                            <input type="number" class="form-control" id="pred_${safeColumnId}" 
-                                   data-column="${column}"
-                                   ${isInteger ? '' : 'min="0" max="10" step="1"'}
-                                   placeholder="${isInteger ? 'Masukkan nilai' : 'Masukkan nilai 0-10'}">
-                        </div>`;
-                }
-            });
-            
-            $('#predictionInputs').html(inputsHtml);
-            $('#newPrediction').show();
+    function getAlertClass(status) {
+        switch(status) {
+            case 'Sehat': return 'alert-success';
+            case 'Berisiko Ringan': return 'alert-warning';
+            case 'Berisiko Berat': return 'alert-danger';
+            default: return 'alert-info';
         }
-
-        function predict() {
-            const inputData = {};
-            let isValid = true;
-            
-            // Debug untuk melihat nilai input
-            console.log("Selected X Columns:", selectedXColumns);
-            
-            selectedXColumns.forEach(column => {
-                // Gunakan ID yang aman
-                const safeColumnId = column.replace(/\s+/g, '_');
-                const element = $(`#pred_${safeColumnId}`);
-                const value = element.val();
-                
-                console.log(`Column: ${column}, Value: ${value}, Element:`, element); // Debug
-                
-                if (value === null || value === "") {
-                    alert(`Mohon isi nilai untuk ${column}`);
-                    isValid = false;
-                    return false;
-                }
-                
-                // Gunakan nama kolom asli untuk data yang dikirim
-                if (column in manual_encodings) {
-                    inputData[column] = value;
-                } else {
-                    const numValue = parseFloat(value);
-                    if (isNaN(numValue)) {
-                        alert(`Nilai tidak valid untuk ${column}`);
-                        isValid = false;
-                        return false;
-                    }
-                    inputData[column] = numValue;
-                }
-            });
-            
-            if (!isValid) return;
-            
-            console.log("Input data to be sent:", inputData); // Debug
-            
-            $.ajax({
-                url: '/predict',
-                type: 'POST',
-                data: JSON.stringify(inputData),
-                contentType: 'application/json',
-                success: function(response) {
-                    if (response.error) {
-                        alert(response.error);
-                        return;
-                    }
-                    $('#predictionResult').html(
-                        `<div class="alert" style="background-color: ${response.color}; color: ${response.color === 'yellow' ? 'black' : 'white'}">
-                            Status Prediksi: <strong>${response.prediction}</strong>
-                        </div>`
-                    );
-                },
-                error: function(xhr, status, error) {
-                    console.error("Error response:", xhr.responseText); // Debug
-                    alert('Error during prediction: ' + error);
-                }
-            });
-        }
-
-        function resetPredictionForm() {
-            // Reset semua input
-            selectedXColumns.forEach(column => {
-                const safeColumnId = column.replace(/\s+/g, '_');
-                const element = $(`#pred_${safeColumnId}`);
-                
-                if (element.is('select')) {
-                    element.val(''); // Reset select ke option default
-                } else {
-                    element.val(''); // Reset input number
-                }
-            });
-            
-            // Hapus hasil prediksi
-            $('#predictionResult').empty();
-        }
+    }
     </script>
 </body>
 </html> 

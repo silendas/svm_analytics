@@ -1,12 +1,24 @@
 # Aplikasi Analisis Kesehatan Mental dengan SVM
 
-Aplikasi web untuk menganalisis kesehatan mental menggunakan Support Vector Machine (SVM). Aplikasi ini memungkinkan pengguna untuk mengupload dataset kesehatan mental, melakukan preprocessing data, melatih model SVM, dan membuat prediksi status kesehatan mental berdasarkan berbagai parameter input.
+Aplikasi web untuk menganalisis kesehatan mental menggunakan Support Vector Machine (SVM). Aplikasi ini memungkinkan pengguna untuk mengisi kuisioner kesehatan mental dan mendapatkan prediksi status kesehatan mental berdasarkan model SVM yang telah dilatih.
 
 ## Deskripsi
-Aplikasi ini dikembangkan untuk membantu para profesional kesehatan mental dan peneliti dalam menganalisis data kesehatan mental secara efisien. Menggunakan algoritma Support Vector Machine (SVM) yang powerful untuk klasifikasi, aplikasi ini dapat mengkategorikan status kesehatan mental ke dalam tiga kategori:
+Aplikasi ini dikembangkan untuk membantu mendeteksi dini masalah kesehatan mental. Menggunakan algoritma Support Vector Machine (SVM), aplikasi ini dapat mengkategorikan status kesehatan mental ke dalam tiga kategori:
 - Sehat
-- Berisiko Rendah  
-- Berisiko Tinggi
+- Berisiko Ringan
+- Berisiko Berat
+
+## Fitur
+- Kuisioner kesehatan mental interaktif
+- Prediksi real-time dengan SVM
+- Visualisasi hasil prediksi
+- Probabilitas per kategori
+- Rekomendasi berdasarkan hasil
+- Metrik evaluasi model (akurasi, precision, recall, F1-score)
+- Panel admin untuk manajemen:
+  - Kelola pertanyaan kuisioner
+  - Lihat dan kelola data responden
+  - Monitoring performa model
 
 ## Instalasi
 1. Clone repository
@@ -15,23 +27,15 @@ Aplikasi ini dikembangkan untuk membantu para profesional kesehatan mental dan p
 
 ## System Requirements
 ### Software Requirements
-- Python 3.8 atau lebih tinggi
+- Python 3.9
+- Web browser modern
 
 ### Python Dependencies
 - Flask==2.0.1
-- pandas==1.3.0
-- numpy==1.21.0
-- scikit-learn==0.24.2
-- matplotlib==3.4.2
-- seaborn==0.11.1
-
-## Fitur
-- Upload dataset (.csv atau .xlsx)
-- Pemilihan kolom input dan target
-- Visualisasi hasil dengan PCA
-- Prediksi data baru
-- Encoding nilai kategorikal
-- Optimasi model otomatis
-- Visualisasi distribusi kelas
-- Cross-validation
-- Metrik evaluasi model
+- Werkzeug==2.0.3
+- gunicorn==20.1.0
+- numpy==1.21.6
+- pandas==1.3.5
+- scikit-learn==1.0.2
+- matplotlib==3.5.3
+- requests==2.28.2

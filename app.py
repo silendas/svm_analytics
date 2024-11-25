@@ -1,397 +1,569 @@
 from flask import Flask, render_template, request, jsonify
-import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split, RandomizedSearchCV, StratifiedKFold
 from sklearn.svm import SVC
-from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.metrics import classification_report, accuracy_score
-from sklearn.pipeline import Pipeline
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.ensemble import VotingClassifier
-from sklearn.decomposition import PCA
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import seaborn as sns
 import io
 import base64
-import logging
-import warnings
-import time
+import requests
+from datetime import datetime
+from threading import Lock
+from sklearn.feature_selection import SelectKBest, f_classif
+from sklearn.pipeline import Pipeline
+from sklearn.model_selection import GridSearchCV
+import pandas as pd
+from sklearn.decomposition import PCA
 
 app = Flask(__name__)
-logging.basicConfig(level=logging.DEBUG)
 
-warnings.simplefilter(action='ignore', category=Warning)
-pd.options.mode.chained_assignment = None
+# URL Firebase
+FIREBASE_URL = 'https://svm-health-default-rtdb.firebaseio.com'
 
+# Global variables
 model = None
-label_encoders = {}
-X_columns = []
-y_column = ''
+scaler = None
+questions = None
+training_data = None
 
-manual_encodings = {}
+# Tambahkan global lock
+plot_lock = Lock()
 
-def debug_dataframe(df, stage=""):
-    logging.debug("\n=== DataFrame Info ({}) ===".format(stage))
-    logging.debug("Shape: {}".format(df.shape))
-    logging.debug("Columns: {}".format(df.columns.tolist()))
-    logging.debug("Target unique values: {}".format(df[y_column].unique()))
-    logging.debug("Sample data:\n{}".format(df.head()))
-    logging.debug("="*50)
+def load_questions():
+    global questions
+    # Ambil data pertanyaan
+    response = requests.get(f'{FIREBASE_URL}/questions.json')
+    questions = response.json()
+    return questions
 
-@app.route('/')
-def home():
-    return render_template('index.html')
-
-@app.route('/upload', methods=['POST'])
-def upload_file():
-    file = request.files['file']
-    if file.filename.endswith('.xlsx'):
-        df = pd.read_excel(file)
-    else:
-        df = pd.read_csv(file)
-    
-    globals()['last_uploaded_file'] = df
-    
-    columns = df.columns.tolist()
-    return jsonify({'columns': columns})
-
-@app.route('/process', methods=['POST'])
-def process_data():
-    global model, label_encoders, X_columns, y_column, scaler
-    
-    data = request.json
-    X_columns = data['X_columns']
-    y_column = data['y_column']
-    
-    if 'last_uploaded_file' not in globals():
-        return jsonify({'error': 'No file uploaded'}), 400
-        
-    df = globals()['last_uploaded_file'].copy()
-    
+def load_training_data():
+    global model, scaler, training_data
     try:
-        column_types = {}
-        for column in df.columns:
-            if df[column].dtype == 'object':
-                column_types[column] = 'categorical'
-            elif np.issubdtype(df[column].dtype, np.number):
-                if df[column].dtype in ['int64', 'int32']:
-                    column_types[column] = 'integer'
-                else:
-                    column_types[column] = 'float'
-            else:
-                column_types[column] = 'unknown'
+        print("\n=== LOADING TRAINING DATA ===")
+        
+        response = requests.get(f'{FIREBASE_URL}/data_model.json')
+        data_model = response.json()
+        
+        if not data_model or 'columns' not in data_model or 'data' not in data_model:
+            raise Exception("Data model tidak lengkap")
+        
+        columns = data_model['columns']
+        data = data_model['data']
+        
+        # Persiapkan data untuk training
+        X = []  # fitur
+        y = []  # label
+        
+        for record in data:
+            try:
+                features = []
+                # Ambil semua kolom kecuali status kesehatan
+                for i in range(len(record)-1):
+                    value = record[i]['value']
+                    
+                    # Konversi nilai
+                    if isinstance(value, str):
+                        if value.lower() == 'ya':
+                            value = 1.0
+                        elif value.lower() == 'tidak':
+                            value = 0.0
+                        else:
+                            try:
+                                value = float(value)
+                            except ValueError:
+                                print(f"Nilai tidak valid: {value}")
+                                continue
+                    else:
+                        value = float(value)
+                    
+                    features.append(value)
+                
+                # Ambil status kesehatan
+                status = float(record[-1]['value'])
+                if status not in [0, 1, 2]:
+                    continue
+                    
+                X.append(features)
+                y.append(status)
+                
+            except (ValueError, TypeError, IndexError) as e:
+                print(f"Gagal memproses record: {e}")
+                continue
 
-        df = df.dropna()
+        X = np.array(X)
+        y = np.array(y)
         
-        unique_classes = df[y_column].nunique()
-        if unique_classes < 2:
-            return jsonify({
-                'error': f'Kolom target {y_column} hanya memiliki {unique_classes} kelas unik. Dibutuhkan minimal 2 kelas untuk klasifikasi.'
-            }), 400
+        print(f"\nShape data awal - X: {X.shape}, y: {y.shape}")
         
-        for column in X_columns:
-            if df[column].dtype == 'object':
-                if column in manual_encodings and manual_encodings[column]:
-                    df[column] = df[column].map(manual_encodings[column])
-                else:
-                    label_encoders[column] = LabelEncoder()
-                    df[column] = label_encoders[column].fit_transform(df[column])
-            df[column] = pd.to_numeric(df[column], errors='coerce')
+        # Pipeline preprocessing dan model dengan parameter yang lebih sesuai
+        pipeline = Pipeline([
+            ('scaler', StandardScaler()),
+            ('svm', SVC(
+                kernel='rbf',
+                probability=True,
+                C=1.0,  # Nilai C yang lebih kecil untuk mengurangi overfitting
+                gamma='auto',
+                class_weight='balanced',
+                random_state=42,
+                max_iter=5000
+            ))
+        ])
         
-        status_map = {
-            'tidak pernah': 0,
-            'jarang': 3,
-            'sering': 7,
-            'selalu': 10
+        # Train model
+        pipeline.fit(X, y)
+        
+        # Simpan model dan scaler
+        model = pipeline.named_steps['svm']
+        scaler = pipeline.named_steps['scaler']
+        
+        # Evaluasi model
+        y_pred = pipeline.predict(X)
+        accuracy = accuracy_score(y, y_pred)
+        
+        print(f"\nAkurasi model: {accuracy*100:.2f}%")
+        print("\nClassification Report:")
+        print(classification_report(y, y_pred))
+        
+        # Simpan data training
+        training_data = {
+            'X': X,
+            'y': y,
+            'X_scaled': scaler.transform(X),
+            'columns': columns[:-1],
+            'pipeline': pipeline
         }
         
-        if df[y_column].dtype == 'object':
-            if any(val.lower() in status_map for val in df[y_column].unique()):
-                df[y_column] = df[y_column].str.lower().map(status_map)
-            else:
-                label_encoders[y_column] = LabelEncoder()
-                df[y_column] = label_encoders[y_column].fit_transform(df[y_column])
+        return True
         
-        def categorize_score(score):
-            if score <= 3:
-                return 0  # Sehat
-            elif score <= 7:
-                return 1  # Berisiko Rendah
-            else:
-                return 2  # Berisiko Tinggi
+    except Exception as e:
+        print(f"\n=== ERROR LOADING DATA ===")
+        print(f"Error detail: {str(e)}")
+        return False
 
-        df['category'] = df[y_column].apply(categorize_score)
+def train_model():
+    global model, scaler, training_data
+    
+    try:
+        if training_data is None or len(training_data) == 0:
+            raise Exception("Data training tidak tersedia")
         
-        unique_categories = df['category'].nunique()
-        if unique_categories < 2:
-            return jsonify({
-                'error': f'Variabel target (Y) diproses hanya menghasilkan {unique_categories} kategori. ' +
-                        'Pastikan variabel target memiliki variasi nilai yang cukup untuk menghasilkan ' +
-                        'minimal 2 kategori (Sehat, Berisiko Rendah, atau Berisiko Tinggi). ' +
-                        'Coba periksa distribusi nilai pada kolom target.'
-            }), 400
+        # Pisahkan fitur dan label
+        X = training_data.iloc[:, :-1]  # Semua kolom kecuali yang terakhir
+        y = training_data.iloc[:, -1]   # Kolom terakhir sebagai label
         
-        X = df[X_columns].copy()
-        y = df['category'].copy()
-        
+        # Scaling fitur
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
         
-        param_grid = {
-            'svm__C': [1, 10],
-            'svm__gamma': ['scale', 0.1],
-            'svm__kernel': ['rbf']
-        }
-
-        pipeline = Pipeline([
-            ('svm', SVC(probability=True, 
-                       random_state=42,
-                       class_weight='balanced'))
-        ])
-
-        cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
-        
-        random_search = RandomizedSearchCV(
-            pipeline,
-            param_distributions=param_grid,
-            n_iter=3,
-            cv=cv,
-            scoring='accuracy',
-            n_jobs=None,
-            verbose=0,
+        # Train model
+        model = SVC(
+            probability=True,
+            kernel='rbf',
+            C=1.0,
+            gamma='scale',
+            class_weight='balanced',
             random_state=42
         )
-
-        X_train, X_test, y_train, y_test = train_test_split(
-            X_scaled, y,
-            test_size=0.2,
-            random_state=42,
-            stratify=y
-        )
-
-        logging.info("Memulai pencarian parameter...")
-        start_time = time.time()
+        model.fit(X_scaled, y)
         
-        random_search.fit(X_train, y_train)
-        model = random_search.best_estimator_
+        # Evaluasi model
+        y_pred = model.predict(X_scaled)
+        print("\nEvaluasi Model:")
+        print("Accuracy:", accuracy_score(y, y_pred))
+        print("\nClassification Report:")
+        print(classification_report(y, y_pred))
         
-        end_time = time.time()
-        logging.info(f"Pencarian parameter selesai dalam {end_time - start_time:.2f} detik")
-
-        y_pred = model.predict(X_test)
-        accuracy = accuracy_score(y_test, y_pred)
-        
-        if accuracy < 0.6:
-            estimators = [
-                ('svm', model),
-                ('dt', DecisionTreeClassifier(
-                    random_state=42, 
-                    class_weight='balanced',
-                    max_depth=5
-                ))
-            ]
-            
-            ensemble = VotingClassifier(
-                estimators=estimators, 
-                voting='soft',
-                n_jobs=None
-            )
-            ensemble.fit(X_train, y_train)
-            y_pred = ensemble.predict(X_test)
-            accuracy = accuracy_score(y_test, y_pred)
-            model = ensemble
-        
-        target_names = ['Sehat', 'Berisiko Rendah', 'Berisiko Tinggi']
-        report = classification_report(
-            y_test, 
-            y_pred,
-            target_names=target_names,
-            output_dict=True,
-            zero_division=1
-        )
-        
-        pca = PCA(n_components=2)
-        X_pca = pca.fit_transform(X_scaled)
-        
-        plt.figure(figsize=(12, 8))
-        colors = ['#2ecc71', '#f1c40f', '#e74c3c']
-        
-        for i, label in enumerate(range(3)):
-            mask = (y == label)
-            if np.any(mask):
-                plt.scatter(
-                    X_pca[mask, 0], 
-                    X_pca[mask, 1],
-                    c=colors[i],
-                    label=target_names[i],
-                    alpha=0.7,
-                    s=100
-                )
-        
-        plt.xlabel('Principal Component 1')
-        plt.ylabel('Principal Component 2')
-        plt.title('Visualisasi Data dengan PCA dan Klasifikasi')
-        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-        plt.grid(True, alpha=0.3)
-        plt.tight_layout()
-        
-        img = io.BytesIO()
-        plt.savefig(img, format='png', bbox_inches='tight', dpi=300)
-        img.seek(0)
-        plot_url = base64.b64encode(img.getvalue()).decode()
-        plt.close()
-        
-        return jsonify({
-            'report': report,
-            'accuracy': accuracy,
-            'plot': plot_url,
-            'column_types': column_types,
-            'pca_components': {
-                'PC1': X_pca[:, 0].tolist(),
-                'PC2': X_pca[:, 1].tolist()
-            },
-            'explained_variance': {
-                'PC1': float(pca.explained_variance_ratio_[0]),
-                'PC2': float(pca.explained_variance_ratio_[1])
-            },
-            'class_distribution': pd.Series(y).value_counts().to_dict()
-        })
+        return True
         
     except Exception as e:
-        logging.error(f"Error during processing: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        print(f"Error training model: {str(e)}")
+        return False
 
-@app.route('/predict', methods=['POST'])
-def predict():
+def initialize_app():
+    global model, scaler, questions, training_data
     try:
-        data = request.json
-        input_data = {}
+        load_questions()
+    except Exception as e:
+        print(f"Error initializing app: {str(e)}")
+        return False
+
+initialize_app()
+
+@app.route('/')
+def index():
+    # Ambil data model dari Firebase
+    response = requests.get(f'{FIREBASE_URL}/data_model.json')
+    data_model = response.json()
+    
+    if not data_model or 'columns' not in data_model:
+        print("Data model atau columns tidak ditemukan")
+        columns = []
+    else:
+        columns = data_model['columns']
+        print("Data columns dari Firebase:", columns)
         
-        for column in X_columns:
-            if column not in data:
-                return jsonify({'error': f'Missing column: {column}'}), 400
+        # Konversi dict ke list jika perlu
+        if isinstance(columns, dict):
+            # Pastikan urutan sesuai dengan indeks
+            max_index = max(int(k) for k in columns.keys())
+            columns = [columns.get(str(i)) for i in range(max_index + 1)]
+            columns = [col for col in columns if col is not None]  # Hapus None values
+            
+            # Filter kolom - PERBAIKAN: tambahkan penggunaan_obat__obatan_terlarang ke whitelist
+            columns = [col for col in columns[1:] if col['name'] not in ['nama', 'status_kesehatan']]
+            
+        print("Columns setelah diproses:", columns)
+    
+    return render_template('index.html', questions=columns, debug=True)
+
+@app.route('/submit_answers', methods=['POST'])
+def submit_answers():
+    try:
+        print("\n=== PROCESSING SUBMISSION ===")
+        
+        # Reset model jika terjadi error sebelumnya
+        global model, scaler, training_data
+        if model is None or scaler is None:
+            success = load_training_data()
+            if not success:
+                return jsonify({'error': 'Gagal memuat model'}), 500
+        
+        # Ambil dan validasi input
+        answers = request.json
+        if not answers:
+            return jsonify({'error': 'Data tidak ditemukan'}), 400
+
+        try:
+            # Persiapkan input data
+            input_features = []
+            for i in range(len(training_data['columns'])):
+                value = answers.get(str(i), '0')
                 
-            value = data[column]
-            if column in manual_encodings:
-                encoded_value = manual_encodings[column].get(value)
-                if encoded_value is None:
-                    return jsonify({'error': f'Invalid value for {column}: {value}'}), 400
-                input_data[column] = float(encoded_value)
-            else:
-                input_data[column] = float(value)
-        
-        input_df = pd.DataFrame([input_data])
-        
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(input_df)
-        
-        prediction = int(model.predict(X_scaled)[0])
-        
-        status_map = {
-            0: "Sehat",
-            1: "Berisiko Rendah",
-            2: "Berisiko Berat"
-        }
-        
-        color_map = {
-            0: "green",
-            1: "yellow",
-            2: "red"
-        }
-        
-        status = status_map[prediction]
-        color = color_map[prediction]
-        
-        return jsonify({
-            'prediction': status,
-            'class': prediction,
-            'color': color
-        })
-        
-    except Exception as e:
-        print(f"Error during prediction: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/check_categorical', methods=['POST'])
-def check_categorical():
-    data = request.json
-    columns = data['columns']
-    
-    if 'last_uploaded_file' not in globals():
-        return jsonify({'error': 'No file uploaded'}), 400
-        
-    df = globals()['last_uploaded_file']
-    
-    categorical_columns = {}
-    for column in columns:
-        if df[column].dtype == 'object':
-            categorical_columns[column] = df[column].unique().tolist()
-    
-    return jsonify({
-        'categorical_columns': list(categorical_columns.keys()),
-        'unique_values': categorical_columns
-    })
-
-@app.route('/save_encoding', methods=['POST'])
-def save_encoding():
-    global manual_encodings
-    manual_encodings = request.json
-    return jsonify({'status': 'success'})
-
-@app.route('/get_sample_predictions', methods=['POST'])
-def get_sample_predictions():
-    try:
-        sample_size = 5
-        predictions = []
-        
-        for _ in range(sample_size):
-            sample_data = {}
-            for column in X_columns:
-                if column in manual_encodings:
-                    values = list(manual_encodings[column].keys())
-                    sample_data[column] = np.random.choice(values)
+                # Konversi nilai
+                if isinstance(value, str):
+                    if value.lower() == 'ya':
+                        value = 1.0
+                    elif value.lower() == 'tidak':
+                        value = 0.0
+                    else:
+                        value = float(value)
                 else:
-                    sample_data[column] = np.random.randint(0, 11)
+                    value = float(value)
+                    
+                input_features.append(value)
             
-            input_data = {}
-            for column, value in sample_data.items():
-                if column in manual_encodings:
-                    input_data[column] = float(manual_encodings[column].get(value, 0))
-                else:
-                    input_data[column] = float(value)
+            input_features = np.array([input_features])
             
-            input_df = pd.DataFrame([input_data])
-            prediction = model.predict(input_df)[0]
+            print(f"Input shape: {input_features.shape}")
             
-            predictions.append({
-                'input_data': sample_data,
-                'prediction': float(prediction)
+            # Gunakan pipeline untuk prediksi
+            prediction = training_data['pipeline'].predict(input_features)[0]
+            probabilities = training_data['pipeline'].predict_proba(input_features)[0]
+            
+            print(f"Hasil prediksi: {prediction}")
+            print(f"Probabilitas: {probabilities}")
+            
+            # Mapping status
+            status_map = {
+                0: "Sehat",
+                1: "Berisiko Ringan",
+                2: "Berisiko Berat"
+            }
+            
+            predicted_status = status_map[int(prediction)]
+            
+            # Format probabilitas
+            prob_status = {
+                "Sehat": f"{probabilities[0]*100:.2f}%",
+                "Berisiko Ringan": f"{probabilities[1]*100:.2f}%",
+                "Berisiko Berat": f"{probabilities[2]*100:.2f}%"
+            }
+
+            # Rekomendasi
+            recommendations = {
+                "Sehat": "Pertahankan pola hidup sehat Anda. Tetap jaga keseimbangan aktivitas fisik dan mental.",
+                "Berisiko Ringan": "Perhatikan kesehatan mental Anda. Disarankan untuk berkonsultasi dengan psikolog.",
+                "Berisiko Berat": "Segera konsultasikan kondisi Anda dengan profesional kesehatan mental atau psikiater."
+            }
+
+            # Generate metrics
+            metrics = generate_metrics()
+            
+            # Generate visualisasi
+            plot_url = generate_visualization(input_features[0], prediction)
+            
+            if plot_url is None:
+                return jsonify({
+                    'status': predicted_status,
+                    'probabilities': prob_status,
+                    'recommendation': recommendations[predicted_status],
+                    'metrics': metrics
+                })
+
+            # Cleanup plot setelah selesai
+            plt.close('all')
+            
+            return jsonify({
+                'status': predicted_status,
+                'probabilities': prob_status,
+                'recommendation': recommendations[predicted_status],
+                'plot': plot_url,
+                'metrics': metrics
             })
+
+        except (ValueError, TypeError, KeyError) as e:
+            print(f"\n=== ERROR PROCESSING INPUT ===")
+            print(f"Error detail: {str(e)}")
+            return jsonify({'error': f'Format input tidak valid: {str(e)}'}), 400
+
+    except Exception as e:
+        print("\n=== ERROR IN PREDICTION ===")
+        print(f"Error detail: {str(e)}")
+        print(f"Error type: {type(e).__name__}")
+        return jsonify({'error': str(e)}), 500
+
+def generate_visualization(input_point, prediction):
+    try:
+        with plot_lock:
+            plt.clf()
+            plt.close('all')
+            
+            fig, ax = plt.subplots(figsize=(12, 8), dpi=100)
+            
+            # Ambil data training
+            X_scaled = training_data['X_scaled']
+            y = training_data['y']
+            
+            # Gunakan PCA untuk mereduksi dimensi menjadi 1D
+            pca = PCA(n_components=1)
+            X_pca = pca.fit_transform(X_scaled)
+            
+            # Transform input point menggunakan PCA yang sama
+            input_pca = pca.transform(input_point.reshape(1, -1))
+            
+            # Scatter plot untuk setiap kategori
+            class_names = ['Sehat', 'Berisiko Ringan', 'Berisiko Berat']
+            colors = ['green', 'yellow', 'red']
+            
+            # Tambahkan jitter untuk menghindari tumpang tindih
+            jitter = np.random.normal(0, 0.1, X_pca.shape[0])
+            
+            for i, (label, color) in enumerate(zip(class_names, colors)):
+                mask = y == i
+                plt.scatter(X_pca[mask, 0] + jitter[mask], 
+                          np.ones(np.sum(mask)) * (i + 1), 
+                          color=color, 
+                          label=label, 
+                          alpha=0.6,
+                          s=100)
+            
+            # Plot titik input
+            plt.scatter(input_pca[0], prediction + 1, 
+                       color='blue', 
+                       marker='*', 
+                       s=300,
+                       label='Input Anda',
+                       zorder=5)
+            
+            plt.title('Visualisasi Status Kesehatan Mental', fontsize=14, pad=20)
+            plt.xlabel('Nilai Fitur (PCA)', fontsize=12)
+            plt.ylabel('Status Kesehatan Mental', fontsize=12)
+            plt.yticks([1, 2, 3], class_names, fontsize=10)
+            plt.legend(fontsize=10, bbox_to_anchor=(1.05, 1), loc='upper left')
+            plt.grid(True, alpha=0.3)
+            
+            plt.tight_layout()
+            
+            img = io.BytesIO()
+            plt.savefig(img, format='png', bbox_inches='tight', dpi=100)
+            img.seek(0)
+            
+            plot_url = base64.b64encode(img.getvalue()).decode()
+            
+            plt.close(fig)
+            plt.close('all')
+            
+            return plot_url
+            
+    except Exception as e:
+        print(f"Error generating visualization: {str(e)}")
+        return None
+
+def generate_metrics():
+    try:
+        # Gunakan data training yang sudah ada
+        X_scaled = training_data['X_scaled']
+        y = training_data['y']
         
-        return jsonify({'predictions': predictions})
+        # Lakukan prediksi pada data training
+        y_pred = model.predict(X_scaled)
+        
+        # Hitung metrik
+        report = classification_report(y, y_pred, output_dict=True)
+        accuracy = accuracy_score(y, y_pred)
+        
+        # Format output
+        metrics = {
+            'accuracy': accuracy * 100,  # Konversi ke persen
+            'report': {
+                'Sehat': {
+                    'precision': report['0.0']['precision'],
+                    'recall': report['0.0']['recall'],
+                    'f1_score': report['0.0']['f1-score']
+                },
+                'Berisiko Ringan': {
+                    'precision': report['1.0']['precision'],
+                    'recall': report['1.0']['recall'],
+                    'f1_score': report['1.0']['f1-score']
+                },
+                'Berisiko Berat': {
+                    'precision': report['2.0']['precision'],
+                    'recall': report['2.0']['recall'],
+                    'f1_score': report['2.0']['f1-score']
+                }
+            }
+        }
+        
+        print("\n=== METRICS ===")
+        print(f"Accuracy: {accuracy * 100:.2f}%")
+        print("\nClassification Report:")
+        print(classification_report(y, y_pred))
+        
+        return metrics
         
     except Exception as e:
-        print(f"Error generating sample predictions: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-    
-@app.route('/check_valid_y_columns', methods=['POST'])
-def check_valid_y_columns():
-    if 'last_uploaded_file' not in globals():
-        return jsonify({'error': 'No file uploaded'}), 400
-        
-    df = globals()['last_uploaded_file']
-    valid_columns = []
-    
-    for column in df.columns:
-        unique_values = df[column].nunique()
-        if unique_values >= 3:
-            valid_columns.append(column)
-    
-    return jsonify({
-        'valid_columns': valid_columns
-    })
+        print(f"Error generating metrics: {str(e)}")
+        return {
+            'accuracy': 0.0,
+            'report': {
+                'Sehat': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0},
+                'Berisiko Ringan': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0},
+                'Berisiko Berat': {'precision': 0.0, 'recall': 0.0, 'f1_score': 0.0}
+            }
+        }
 
-application = app
+@app.route('/manage')
+def manage():
+    return render_template('manage_menu.html')
+
+@app.route('/manage/questions')
+def manage_questions():
+    if questions is None:
+        load_questions()
+    return render_template('manage_questions.html', questions=questions)
+
+@app.route('/manage/data')
+def manage_data():
+    try:
+        # Ambil data kolom dari Firebase
+        response = requests.get(f'{FIREBASE_URL}/data_model/columns.json')
+        columns_data = response.json()
+        
+        # Konversi list ke dictionary jika diperlukan
+        if isinstance(columns_data, list):
+            columns_data = {str(idx): col for idx, col in enumerate(columns_data)}
+        elif columns_data is None:
+            columns_data = {}
+            
+        # Ambil data records
+        response = requests.get(f'{FIREBASE_URL}/data_model/data.json')
+        records_data = response.json()
+        
+        # Konversi list ke dictionary jika diperlukan
+        if isinstance(records_data, list):
+            records_data = {str(idx): record for idx, record in enumerate(records_data)}
+        elif records_data is None:
+            records_data = {}
+        
+        return render_template('manage_data.html', 
+                             columns_data=columns_data,
+                             records_data=records_data)
+                             
+    except Exception as e:
+        print(f"Error loading data: {str(e)}")
+        return render_template('manage_data.html', 
+                             columns_data={},
+                             records_data={},
+                             error="Gagal memuat data")
+
+@app.route('/api/questions', methods=['GET', 'POST'])
+def handle_questions():
+    if request.method == 'POST':
+        data = request.json
+        if 'id' in data:  # update
+            requests.patch(f'{FIREBASE_URL}/questions/{data["id"]}.json', json=data)
+        else:  # create
+            response = requests.get(f'{FIREBASE_URL}/questions.json')
+            current_data = response.json() or {}
+            new_id = str(len(current_data))
+            requests.put(f'{FIREBASE_URL}/questions/{new_id}.json', json=data)
+        return jsonify({'success': True})
+    
+    response = requests.get(f'{FIREBASE_URL}/questions.json')
+    return jsonify(response.json())
+
+@app.route('/api/questions/<id>', methods=['DELETE'])
+def delete_question(id):
+    requests.delete(f'{FIREBASE_URL}/questions/{id}.json')
+    return jsonify({'success': True})
+
+@app.route('/api/data_model/columns')
+def get_columns():
+    response = requests.get(f'{FIREBASE_URL}/data_model.json')
+    data_model = response.json()
+    
+    if not data_model or 'columns' not in data_model:
+        return jsonify([])
+        
+    columns = data_model['columns']
+    
+    # Konversi dict ke list jika perlu
+    if isinstance(columns, dict):
+        columns = [columns[str(i)] for i in range(len(columns))]
+        
+    return jsonify(columns)
+
+@app.route('/api/data_model/data')
+def get_data():
+    response = requests.get(f'{FIREBASE_URL}/data_model.json')
+    data_model = response.json()
+    
+    if not data_model or 'data' not in data_model:
+        return jsonify({})
+        
+    return jsonify(data_model['data'])
+
+@app.route('/api/data_model/data', methods=['POST'])
+def add_data():
+    new_data = request.json
+    
+    # Format data sesuai struktur yang diinginkan
+    formatted_data = {
+        "usia": {
+            "name": "usia",
+            "value": new_data.get('0')  # Ambil nilai usia
+        },
+        "jenis_kelamin": {
+            "name": "jenis_kelamin",
+            "value": new_data.get('1')  # Ambil nilai jenis kelamin
+        },
+        "status_kesehatan": {
+            "name": "status_kesehatan",
+            "value": new_data.get('2', 0)  # Ambil nilai status kesehatan, default 0
+        }
+    }
+    
+    # Generate ID baru
+    new_id = str(int(datetime.now().timestamp() * 1000))
+    
+    # Update data di Firebase
+    requests.patch(f'{FIREBASE_URL}/data_model/data.json', json={new_id: formatted_data})
+    
+    return jsonify({'success': True})
+    
+application = app    
 
 if __name__ == '__main__':
-    application.run()
+    app.run()
