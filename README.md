@@ -8,6 +8,11 @@ Aplikasi ini dikembangkan untuk membantu para profesional kesehatan mental dan p
 - Berisiko Rendah  
 - Berisiko Tinggi
 
+## Instalasi
+1. Clone repository
+2. Install dependencies: `pip install -r requirements.txt`
+3. Jalankan aplikasi: `python app.py`
+
 ## System Requirements
 ### Software Requirements
 - Python 3.8 atau lebih tinggi
@@ -30,10 +35,3 @@ Aplikasi ini dikembangkan untuk membantu para profesional kesehatan mental dan p
 - Visualisasi distribusi kelas
 - Cross-validation
 - Metrik evaluasi model
-
-## Instalasi
-1. Clone repository
-2. Install dependencies: `pip install -r requirements.txt`
-3. Jalankan aplikasi: `python app.py`
-
-## Struktur Folder
