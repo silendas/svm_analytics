@@ -254,10 +254,6 @@
                     </div>
                     
                     <div class="text-center mt-4">
-                        <button type="button" class="btn btn-secondary me-2" id="btnRandomFill">
-                            <i class="bi bi-shuffle me-2"></i>
-                            Isi Acak
-                        </button>
                         <button type="reset" class="btn btn-secondary me-2">
                             <i class="bi bi-arrow-counterclockwise me-2"></i>
                             Reset
@@ -312,22 +308,6 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
     $(document).ready(function() {
-        // Fungsi untuk mengisi form secara acak
-        $('#btnRandomFill').click(function() {
-            $('input[type="number"], select').each(function() {
-                const $input = $(this);
-                if ($input.attr('type') === 'number') {
-                    const min = parseInt($input.attr('min'));
-                    const max = parseInt($input.attr('max'));
-                    $input.val(Math.floor(Math.random() * (max - min + 1)) + min);
-                } else {
-                    const $options = $input.find('option:not([value=""])');
-                    const randomIndex = Math.floor(Math.random() * $options.length);
-                    $input.val($options.eq(randomIndex).val());
-                }
-            });
-        });
-
         // Handler submit form
         $('#questionForm').submit(function(e) {
             e.preventDefault();
