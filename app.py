@@ -21,17 +21,6 @@ training_data = None
 # Tambahkan global lock
 plot_lock = Lock()
 
-def load_questions():
-    """Load questions from Firebase."""
-    global questions
-    try:
-        response = requests.get(f'{FIREBASE_URL}/questions.json')
-        questions = response.json()
-        return questions
-    except Exception as e:
-        print(f"Error loading questions: {str(e)}")
-        return None
-
 def load_training_data():
     """Load and preprocess training data from Firebase with custom labels."""
     global training_data
@@ -58,14 +47,27 @@ def load_training_data():
         y = []
         for features in X:
             risk_score = np.mean(features)  # Example: use the average value of features as the criterion
-            if risk_score <= 2.5:
+            if risk_score <= 2:
                 y.append(0)  # Sehat
-            elif 2.5 < risk_score <= 3.5:
+            elif 2 < risk_score <= 2.5:
                 y.append(1)  # Berisiko Tinggi
             else:
                 y.append(2)  # Berisiko Berat
 
         y = np.array(y, dtype=int)
+
+        # Check for missing classes and add synthetic samples if necessary
+        missing_classes = set([0, 1, 2]) - set(y)
+        if missing_classes:
+            print(f"Adding synthetic samples for missing classes: {missing_classes}")
+            synthetic_X = []
+            synthetic_y = []
+            for cls in missing_classes:
+                # Add one synthetic sample for each missing class
+                synthetic_X.append(np.mean(X, axis=0))  # Use the mean feature values as synthetic data
+                synthetic_y.append(cls)
+            X = np.vstack([X, np.array(synthetic_X)])
+            y = np.hstack([y, np.array(synthetic_y)])
 
         # Define a pipeline with scaling and SVM model
         pipeline = Pipeline([
@@ -99,11 +101,30 @@ def load_training_data():
 
 @app.route('/')
 def index():
-    """Render the index page with questions."""
-    global questions
-    if questions is None:
-        load_questions()
-    return render_template('index.html', questions=questions, debug=True)
+    # Ambil data model dari Firebase
+    response = requests.get(f'{FIREBASE_URL}/data_model.json')
+    data_model = response.json()
+    
+    if not data_model or 'columns' not in data_model:
+        print("Data model atau columns tidak ditemukan")
+        columns = []
+    else:
+        columns = data_model['columns']
+        print("Data columns dari Firebase:", columns)
+        
+        # Konversi dict ke list jika perlu
+        if isinstance(columns, dict):
+            # Pastikan urutan sesuai dengan indeks
+            max_index = max(int(k) for k in columns.keys())
+            columns = [columns.get(str(i)) for i in range(max_index + 1)]
+            columns = [col for col in columns if col is not None]  # Hapus None values
+            
+            # Filter kolom - PERBAIKAN: tambahkan penggunaan_obat__obatan_terlarang ke whitelist
+            columns = [col for col in columns[1:] if col['name'] not in ['nama', 'status_kesehatan']]
+            
+        print("Columns setelah diproses:", columns)
+    
+    return render_template('index.html', questions=columns, debug=True)
 
 @app.route('/submit_answers', methods=['POST'])
 def submit_answers():
@@ -158,6 +179,7 @@ def submit_answers():
         print(f"Error during prediction: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+application = app
 
 if __name__ == '__main__':
     app.run(debug=True)
