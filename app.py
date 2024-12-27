@@ -3,6 +3,7 @@ import numpy as np
 from sklearn.svm import SVC
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
+from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.metrics import classification_report, accuracy_score
 import requests
 from threading import Lock
@@ -35,69 +36,58 @@ def load_training_data():
         columns = data_model['columns']
         data = data_model['data']
 
-        # Prepare features (X)
+        # Prepare features (X) and labels (y)
         X = []
+        y = []
+
         for record in data:
-            features = [float(r['value']) for r in record[:-1]]  # Skip the original label
+            features = [float(r['value']) for r in record]
+            label = float(record[8]['value'])  # Use value at index 8 as label
             X.append(features)
+            y.append(label)
 
         X = np.array(X, dtype=float)
-
-        # Define custom labels (y) based on feature values
-        y = []
-        for features in X:
-            risk_score = np.mean(features)  # Example: use the average value of features as the criterion
-            if risk_score <= 2:
-                y.append(0)  # Sehat
-            elif 2 < risk_score <= 2.5:
-                y.append(1)  # Berisiko Tinggi
-            else:
-                y.append(2)  # Berisiko Berat
-
         y = np.array(y, dtype=int)
 
-        # Check for missing classes and add synthetic samples if necessary
-        missing_classes = set([0, 1, 2]) - set(y)
-        if missing_classes:
-            print(f"Adding synthetic samples for missing classes: {missing_classes}")
-            synthetic_X = []
-            synthetic_y = []
-            for cls in missing_classes:
-                # Add one synthetic sample for each missing class
-                synthetic_X.append(np.mean(X, axis=0))  # Use the mean feature values as synthetic data
-                synthetic_y.append(cls)
-            X = np.vstack([X, np.array(synthetic_X)])
-            y = np.hstack([y, np.array(synthetic_y)])
+                # Split data into train and test sets for evaluation
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+
+        # Define parameter grid for GridSearchCV
+        param_grid = {
+            'svm__C': [0.1, 1, 10, 100],
+            'svm__gamma': ['scale', 'auto', 0.1, 1, 10],
+            'svm__kernel': ['rbf', 'linear']
+        }
 
         # Define a pipeline with scaling and SVM model
         pipeline = Pipeline([
             ('scaler', StandardScaler()),
-            ('svm', SVC(
-                probability=True,
-                kernel='rbf',
-                C=10,
-                gamma='scale',
-                class_weight={0: 1, 1: 2, 2: 3},
-                random_state=42
-            ))
+            ('svm', SVC(probability=True, class_weight='balanced', random_state=42))
         ])
 
-        # Train pipeline
-        pipeline.fit(X, y)
+        # Perform GridSearchCV
+        grid_search = GridSearchCV(pipeline, param_grid, cv=3, scoring='accuracy', verbose=2)
+        grid_search.fit(X_train, y_train)
+
+        # Evaluate model on test set
+        y_pred = grid_search.best_estimator_.predict(X_test)
+        accuracy = accuracy_score(y_test, y_pred) * 100
+        print(f"Model Accuracy: {accuracy:.2f}%")
+        print("Classification Report on Test Data:\n", classification_report(y_test, y_pred))
 
         training_data = {
             'X': X,
             'y': y,
-            'columns': columns[:-1],  # Ignore the last column (label) from columns
-            'pipeline': pipeline
+            'columns': list(columns),
+            'pipeline': grid_search.best_estimator_
         }
 
         print("Training data loaded successfully with custom labels.")
+        print(f"Best Parameters: {grid_search.best_params_}")
         return True
     except Exception as e:
         print(f"Error loading training data: {str(e)}")
         return False
-
 
 @app.route('/')
 def index():
@@ -156,12 +146,15 @@ def submit_answers():
         status_map = {
             0: "Sehat",
             1: "Berisiko Ringan",
-            2: "Berisiko Berat"
+            2: "Berisiko Ringan",
+            3: "Berisiko Berat"
         }
         recommendations = {
-            "Sehat": "Pertahankan pola hidup sehat.",
-            "Berisiko Ringan": "Konsultasikan dengan psikolog.",
-            "Berisiko Berat": "Hubungi psikiater segera."
+            "Sehat": "Tetap pertahankan pola hidup sehatmu saat ini dengan tidur yang cukup, olahraga rutin, dan makan makanan bergizi. Jaga keseimbangan antara aktivitas dan istirahat. Luangkan waktu untuk melakukan hobi dan bersosialisasi dengan orang-orang terdekat",
+            
+            "Berisiko Ringan": "Sebaiknya mulai berkonsultasi dengan psikolog profesional untuk mendapatkan panduan yang tepat. Cobalah teknik relaksasi sederhana seperti pernapasan dalam dan meditasi. Kurangi konsumsi kafein, jaga pola tidur, dan catat perubahan mood harianmu. Ceritakan perasaanmu pada orang yang kamu percaya",
+            
+            "Berisiko Berat": "Sangat disarankan untuk segera bertemu psikiater guna mendapatkan penanganan profesional yang sesuai. Pastikan ada pendampingan dari keluarga atau orang terdekat yang dapat dipercaya. Ikuti program terapi dan pengobatan yang direkomendasikan secara rutin. Bergabunglah dengan kelompok dukungan untuk berbagi pengalaman dan mendapat dukungan tambahan"
         }
 
         predicted_status = status_map[int(prediction)]
@@ -171,7 +164,7 @@ def submit_answers():
             'probabilities': {
                 "Sehat": f"{probabilities[0]*100:.2f}%",
                 "Berisiko Ringan": f"{probabilities[1]*100:.2f}%",
-                "Berisiko Berat": f"{probabilities[2]*100:.2f}%"  # Safe fallback
+                "Berisiko Berat": f"{probabilities[2]*100:.2f}%"
             },
             'recommendation': recommendations[predicted_status]
         })
